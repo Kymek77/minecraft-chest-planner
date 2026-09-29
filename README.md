@@ -32,3 +32,5 @@ The Vite configuration detects the repository name automatically in Actions, so 
 ## Data coverage
 
 The scheduled **Check Minecraft data coverage** workflow compares Mojang's latest public release with the latest release present in `minecraft-data`. This keeps the source gap visible in the Actions summary while the upstream generator and data repository catch up.
+
+The manual **Generate Minecraft data** workflow follows the upstream generation process. Enter a Minecraft version under **Actions → Generate Minecraft data → Run workflow** to run the Java/Gradle generator and download its output as an artifact. This requires that `minecraft-data-generator` already supports that version; new releases may need upstream generator code changes before generation can succeed.

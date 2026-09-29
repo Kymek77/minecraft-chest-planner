@@ -1,0 +1,57 @@
+name: Generate Minecraft data
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Minecraft Java version to generate
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Checkout generator
+        uses: actions/checkout@v5
+        with:
+          repository: PrismarineJS/minecraft-data-generator
+          path: minecraft-data-generator
+
+      - name: Add requested version
+        working-directory: minecraft-data-generator
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          npm install
+          npm run bump -- "$VERSION"
+
+      - name: Generate data
+        working-directory: minecraft-data-generator
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          chmod +x gradlew
+          ./gradlew ":mc:${VERSION}:runServer"
+
+      - name: Upload generated data
+        uses: actions/upload-artifact@v4
+        with:
+          name: minecraft-data-${{ inputs.version }}
+          path: minecraft-data-generator/mc/${{ inputs.version }}/run/minecraft-data
+          if-no-files-found: error
+          retention-days: 14
