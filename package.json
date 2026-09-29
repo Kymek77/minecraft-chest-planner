@@ -7,7 +7,8 @@
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview --host",
-    "check:data": "node scripts/check-data-coverage.mjs"
+    "check:data": "node scripts/check-data-coverage.mjs",
+    "sync:data": "node scripts/sync-generated-minecraft-data.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

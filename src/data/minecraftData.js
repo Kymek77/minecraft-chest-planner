@@ -5,6 +5,7 @@ export const MINECRAFT_DATA_REPO =
   'https://raw.githubusercontent.com/PrismarineJS/minecraft-data/master/data/pc';
 export const MOJANG_VERSION_MANIFEST =
   'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json';
+const LOCAL_DATA_ROOT = `${import.meta.env.BASE_URL}minecraft-data`;
 
 export const nonSurvivalItemIds = new Set([
   'minecraft:barrier',
@@ -190,9 +191,16 @@ export const itemCategories = [
 ];
 
 export const fetchMinecraftVersions = async () => {
-  const response = await fetch(`${MINECRAFT_DATA_REPO}/common/versions.json`);
-  if (!response.ok) throw new Error(`Unable to load Minecraft versions (${response.status})`);
-  return response.json();
+  const [remoteResponse, localResponse] = await Promise.all([
+    fetch(`${MINECRAFT_DATA_REPO}/common/versions.json`),
+    fetch(`${LOCAL_DATA_ROOT}/versions.json`),
+  ]);
+
+  if (!remoteResponse.ok) throw new Error(`Unable to load Minecraft versions (${remoteResponse.status})`);
+
+  const remoteVersions = await remoteResponse.json();
+  const localVersions = localResponse.ok ? await localResponse.json() : [];
+  return [...new Set([...remoteVersions, ...localVersions])];
 };
 
 export const fetchMojangReleaseVersions = async () => {
@@ -209,7 +217,10 @@ export const fetchMojangReleaseVersions = async () => {
 };
 
 export const fetchMinecraftItems = async (version) => {
-  const response = await fetch(`${MINECRAFT_DATA_REPO}/${encodeURIComponent(version)}/items.json`);
+  const localResponse = await fetch(`${LOCAL_DATA_ROOT}/${encodeURIComponent(version)}/items.json`);
+  const response = localResponse.ok
+    ? localResponse
+    : await fetch(`${MINECRAFT_DATA_REPO}/${encodeURIComponent(version)}/items.json`);
   if (!response.ok) throw new Error(`Unable to load Minecraft ${version} items (${response.status})`);
 
   const items = await response.json();

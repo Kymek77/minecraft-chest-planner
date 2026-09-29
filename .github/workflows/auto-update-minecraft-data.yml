@@ -1,0 +1,62 @@
+name: Auto-update Minecraft data
+
+on:
+  schedule:
+    - cron: '47 5 * * *'
+  push:
+    branches: [develop]
+    paths-ignore:
+      - public/minecraft-data/**
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: minecraft-data-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout planner
+        uses: actions/checkout@v5
+        with:
+          ref: develop
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Checkout generator
+        uses: actions/checkout@v5
+        with:
+          repository: PrismarineJS/minecraft-data-generator
+          path: minecraft-data-generator
+
+      - name: Generate latest public release
+        env:
+          GENERATOR_DIR: minecraft-data-generator
+          OUTPUT_DIR: public/minecraft-data
+        run: node scripts/sync-generated-minecraft-data.mjs
+
+      - name: Commit generated data
+        run: |
+          if git diff --quiet -- public/minecraft-data; then
+            echo "No new generated Minecraft data."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/minecraft-data
+          git commit -m "Update generated Minecraft data"
+          git push origin develop
