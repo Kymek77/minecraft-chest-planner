@@ -40,6 +40,45 @@ const patchKnownGeneratorCompatibility = (versionDirectory) => {
     writeFileSync(tintsPath, patchedSource);
     console.log(`Applied the ${versionDirectory.split('/').at(-1)} tint compatibility patch.`);
   }
+
+  const biomesPath = join(
+    versionDirectory,
+    'src',
+    'main',
+    'java',
+    'dev',
+    'u9g',
+    'minecraftdatagenerator',
+    'generators',
+    'BiomesDataGenerator.java',
+  );
+  if (existsSync(biomesPath)) {
+    const biomesSource = readFileSync(biomesPath, 'utf8');
+    const patchedBiomesSource = biomesSource.replace(
+      'EnvironmentAttributeMap.Entry<Integer, ?> skyColorEntry',
+      'EnvironmentAttributeMap.Entry<?, ?> skyColorEntry',
+    );
+    if (patchedBiomesSource !== biomesSource) writeFileSync(biomesPath, patchedBiomesSource);
+  }
+
+  const entitiesPath = join(
+    versionDirectory,
+    'src',
+    'main',
+    'java',
+    'dev',
+    'u9g',
+    'minecraftdatagenerator',
+    'generators',
+    'EntitiesDataGenerator.java',
+  );
+  if (existsSync(entitiesPath)) {
+    const entitiesSource = readFileSync(entitiesPath, 'utf8');
+    const patchedEntitiesSource = entitiesSource
+      .replace(/\s*if \(entityType == EntityType\.PLAYER\) \{\s*entityTypeString = "player";\s*\}/, '')
+      .replace(/\s*if \(entityType == EntityType\.PLAYER\) return "UNKNOWN";/, '');
+    if (patchedEntitiesSource !== entitiesSource) writeFileSync(entitiesPath, patchedEntitiesSource);
+  }
 };
 
 const manifestResponse = await fetch(manifestUrl);
