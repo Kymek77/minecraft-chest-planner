@@ -13,6 +13,35 @@ const run = (command, args, cwd) => {
   }
 };
 
+const patchKnownGeneratorCompatibility = (versionDirectory) => {
+  const tintsPath = join(
+    versionDirectory,
+    'src',
+    'main',
+    'java',
+    'dev',
+    'u9g',
+    'minecraftdatagenerator',
+    'generators',
+    'TintsDataGenerator.java',
+  );
+
+  if (!existsSync(tintsPath)) return;
+
+  const source = readFileSync(tintsPath, 'utf8');
+  const patchedSource = source
+    .replace(/\nimport net\.minecraft\.world\.level\.block\.RedStoneWireBlock;\n/, '\n')
+    .replace(
+      /public static Map<Integer, Integer> generateRedstoneTintColors\(\) \{[\s\S]*?\n    \}\n\n    private static int removeAlphaChannel/,
+      'public static Map<Integer, Integer> generateRedstoneTintColors() {\n        return new LinkedHashMap<>();\n    }\n\n    private static int removeAlphaChannel',
+    );
+
+  if (patchedSource !== source) {
+    writeFileSync(tintsPath, patchedSource);
+    console.log(`Applied the ${versionDirectory.split('/').at(-1)} tint compatibility patch.`);
+  }
+};
+
 const manifestResponse = await fetch(manifestUrl);
 if (!manifestResponse.ok) throw new Error(`Unable to load Mojang version manifest (${manifestResponse.status})`);
 const manifest = await manifestResponse.json();
@@ -27,6 +56,8 @@ if (!existsSync(generatorVersionDirectory)) {
 if (!existsSync(generatorVersionDirectory)) {
   throw new Error(`minecraft-data-generator does not support ${latestRelease} yet.`);
 }
+
+patchKnownGeneratorCompatibility(generatorVersionDirectory);
 
 const gradleCommand = process.platform === 'win32' ? 'gradlew.bat' : './gradlew';
 if (process.platform !== 'win32') chmodSync(join(generatorDirectory, 'gradlew'), 0o755);
