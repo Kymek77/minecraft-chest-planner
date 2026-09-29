@@ -64,7 +64,10 @@ function App() {
         if (!active) return;
         const supportedVersions = versions.filter((version) => publicReleaseInfo.releases.includes(version));
         const latestSupported = supportedVersions.at(-1) || DEFAULT_MINECRAFT_VERSION;
-        setMinecraftVersions(supportedVersions);
+        const versionOptions = publicReleaseInfo.releases.includes(publicReleaseInfo.latestRelease)
+          ? [...supportedVersions, ...(supportedVersions.includes(publicReleaseInfo.latestRelease) ? [] : [publicReleaseInfo.latestRelease])]
+          : supportedVersions;
+        setMinecraftVersions(versionOptions);
         setLatestPublicVersion(publicReleaseInfo.latestRelease);
         setLatestSupportedVersion(latestSupported);
 
@@ -373,7 +376,13 @@ function App() {
             Minecraft version
             <select value={minecraftVersion} onChange={(event) => setMinecraftVersion(event.target.value)}>
               {minecraftVersions.map((version) => (
-                <option key={version} value={version}>{version}</option>
+                <option
+                  key={version}
+                  value={version}
+                  disabled={version === latestPublicVersion && version !== latestSupportedVersion}
+                >
+                  {version}{version === latestPublicVersion && version !== latestSupportedVersion ? ' (data pending)' : ''}
+                </option>
               ))}
             </select>
           </label>
