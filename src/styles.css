@@ -821,6 +821,31 @@ input:focus, select:focus {
   font-size: 0.72rem;
 }
 
+.reservation-group-entry {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.reservation-group-entry .minecraft-item-icon {
+  flex-basis: 20px;
+  width: 20px;
+  height: 20px;
+}
+
+.reservation-group-entry span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reservation-group-entry select {
+  width: auto;
+  padding: 3px 5px;
+  font-size: 0.7rem;
+}
+
 .reservation-swatch {
   grid-row: span 2;
   width: 8px;

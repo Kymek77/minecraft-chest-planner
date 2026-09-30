@@ -137,7 +137,6 @@ function App() {
   const [selectedCategory, setSelectedCategory] = useState(unassignedStorageGroup.id);
   const [searchQuery, setSearchQuery] = useState('');
   const [itemScope, setItemScope] = useState('survival');
-  const [itemOrder, setItemOrder] = useState('class');
   const [includedItems, setIncludedItems] = useState(() => makeIncludedItemMap(fallbackMinecraftItems));
   const [itemGroupOverrides, setItemGroupOverrides] = useState({});
   const [itemDedicatedChestOverrides, setItemDedicatedChestOverrides] = useState({});
@@ -284,16 +283,12 @@ function App() {
 
   const orderedAvailableItems = useMemo(() => {
     const sorted = availableItems.slice();
-    if (itemOrder === 'alphabetical') {
-      return sorted.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
-    }
-
     return sorted.sort((a, b) =>
       (storageGroups.findIndex((group) => group.id === itemStorageGroups[a.id]) - storageGroups.findIndex((group) => group.id === itemStorageGroups[b.id])) ||
       a.name.localeCompare(b.name) ||
       a.id.localeCompare(b.id),
     );
-  }, [availableItems, itemOrder, itemStorageGroups]);
+  }, [availableItems, itemStorageGroups, storageGroups]);
 
   const selectedItems = useMemo(
     () => orderedAvailableItems.filter((item) => includedItems[item.id]),
@@ -509,15 +504,6 @@ function App() {
         items: data.itemCount,
       })),
     [categoryGroups],
-  );
-
-  const priorityItems = useMemo(
-    () =>
-      selectedItems
-        .slice()
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .slice(0, 8),
-    [selectedItems],
   );
 
   const toggleItemIncluded = (itemId) => {
@@ -848,13 +834,6 @@ function App() {
               ))}
             </select>
           </label>
-          <label>
-            Item ordering
-            <select value={itemOrder} onChange={(event) => setItemOrder(event.target.value)}>
-              <option value="class">Storage group, then name</option>
-              <option value="alphabetical">Alphabetical only</option>
-            </select>
-          </label>
           <p className="data-status" role="status">{dataStatus}</p>
 
           <div className="field-grid">
@@ -1137,21 +1116,6 @@ function App() {
             </div>
           </div>
 
-          <div className="summary-block">
-            <h3>Priority types</h3>
-            <p className="helper-text">Alphabetical quick-reference preview of the first eight selected item types. It does not change reservations or placement.</p>
-            <div className="priority-list">
-              {priorityItems.map((item) => (
-                <div key={item.id} className="priority-row">
-                  <MinecraftItemIcon item={item} assetVersion={minecraftVersion || TEXTURE_VERSION} />
-                  <div>
-                    <strong>{item.name}</strong>
-                    <small>{storageGroupById[itemStorageGroups[item.id]].label}</small>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         </aside>
       </main>
 
@@ -1212,7 +1176,21 @@ function App() {
                   <small>{group.entries.length} reservations, {group.entries.reduce((total, entry) => total + entry.chestCount, 0)} chests</small>
                   {expandedReservationGroups[group.id] && (
                     <div className="reservation-group-entries">
-                      {group.entries.map((entry) => <span key={entry.id}>{entry.label} ({entry.chestCount})</span>)}
+                      {group.entries.map((entry) => (
+                        <div key={entry.id} className="reservation-group-entry">
+                          <MinecraftItemIcon item={entry.iconItem} assetVersion={minecraftVersion || TEXTURE_VERSION} />
+                          <span>{entry.label} ({entry.chestCount})</span>
+                          <select
+                            value={reservationSectionOverrides[entry.id] || ''}
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={(event) => moveReservationToSection(entry.id, event.target.value)}
+                            aria-label={`Place ${entry.label}`}
+                          >
+                            <option value="">Auto</option>
+                            {sections.map((section) => <option key={section.id} value={section.id}>Section {section.id}</option>)}
+                          </select>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
