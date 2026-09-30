@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { DndContext, PointerSensor, TouchSensor, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
-import { Trash2 } from 'lucide-react';
-import {
-  inventoryPresets,
-} from './data/minecraftItems';
+import { Check, Pencil, Trash2 } from 'lucide-react';
 import {
   fetchMinecraftDataVersions,
   fetchMinecraftItems,
@@ -139,7 +136,6 @@ function App() {
   const [chestType, setChestType] = useState('double');
   const [selectedCategory, setSelectedCategory] = useState(unassignedStorageGroup.id);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedPreset, setSelectedPreset] = useState('survival');
   const [itemScope, setItemScope] = useState('survival');
   const [itemOrder, setItemOrder] = useState('class');
   const [includedItems, setIncludedItems] = useState(() => makeIncludedItemMap(fallbackMinecraftItems));
@@ -154,6 +150,9 @@ function App() {
   const [draggedItemId, setDraggedItemId] = useState(null);
   const [newStorageGroupName, setNewStorageGroupName] = useState('');
   const [newStoragePoolName, setNewStoragePoolName] = useState('');
+  const [editingGroupId, setEditingGroupId] = useState(null);
+  const [editingPoolId, setEditingPoolId] = useState(null);
+  const [renameDraft, setRenameDraft] = useState('');
   const dragSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 6 } }),
@@ -626,17 +625,8 @@ function App() {
     if (selectedCategory === groupId) setSelectedCategory(unassignedStorageGroup.id);
   };
 
-  const applyPreset = (presetKey) => {
-    const preset = inventoryPresets[presetKey];
-    if (!preset) return;
-
-    setSelectedPreset(presetKey);
-    setIncludedItems(makeIncludedItemMap(minecraftItems, preset.itemIds));
-  };
-
   const resetToDefault = () => {
-    setSelectedPreset('survival');
-    setItemScope('survival');
+    setItemScope('all');
     setIncludedItems(makeIncludedItemMap(minecraftItems));
     setItemGroupOverrides({});
     setItemDedicatedChestOverrides({});
@@ -646,6 +636,18 @@ function App() {
     setStorageGroupChestOverrides({});
     setReservationSectionOverrides({});
     setSelectedCategory(unassignedStorageGroup.id);
+  };
+
+  const confirmGroupRename = (groupId) => {
+    const label = renameDraft.trim();
+    if (label) setCustomStorageGroups((current) => current.map((group) => (group.id === groupId ? { ...group, label } : group)));
+    setEditingGroupId(null);
+  };
+
+  const confirmPoolRename = (poolId) => {
+    const label = renameDraft.trim();
+    if (label) setCustomStoragePools((current) => current.map((pool) => (pool.id === poolId ? { ...pool, label } : pool)));
+    setEditingPoolId(null);
   };
 
   const exportPlan = () => {
@@ -881,22 +883,6 @@ function App() {
             ))}
           </div>
 
-          <div className="preset-block">
-            <h3>Presets</h3>
-            <div className="preset-list">
-              {Object.entries(inventoryPresets).map(([key, preset]) => (
-                <button
-                  key={key}
-                  type="button"
-                  className={selectedPreset === key ? 'preset selected' : 'preset'}
-                  onClick={() => applyPreset(key)}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
           <div className="scope-block">
             <div>
               <h3>Survival view</h3>
@@ -936,18 +922,20 @@ function App() {
                     className={selectedCategory === group.id ? 'tab active' : 'tab'}
                     onClick={() => setSelectedCategory(group.id)}
                   >
-                    {group.label}
+                    {editingGroupId === group.id ? (
+                      <input value={renameDraft} onChange={(event) => setRenameDraft(event.target.value)} onClick={(event) => event.stopPropagation()} autoFocus />
+                    ) : group.label}
                   </button>
                   {group.id !== unassignedStorageGroup.id && (
-                    <button
-                      type="button"
-                      className="delete-control"
-                      aria-label={`Delete ${group.label} group`}
-                      title={`Delete ${group.label} group`}
-                      onClick={() => deleteStorageGroup(group.id)}
-                    >
-                      <Trash2 size={15} strokeWidth={2} aria-hidden="true" />
-                    </button>
+                    <>
+                      <button type="button" className="edit-control" aria-label={`Rename ${group.label} group`} onClick={() => {
+                        if (editingGroupId === group.id) confirmGroupRename(group.id);
+                        else { setEditingGroupId(group.id); setRenameDraft(group.label); }
+                      }}>
+                        {editingGroupId === group.id ? <Check size={15} /> : <Pencil size={14} />}
+                      </button>
+                      <button type="button" className="delete-control" aria-label={`Delete ${group.label} group`} title={`Delete ${group.label} group`} onClick={() => deleteStorageGroup(group.id)}><Trash2 size={15} /></button>
+                    </>
                   )}
                 </ItemDropTarget>
               ))}
@@ -987,7 +975,7 @@ function App() {
               {storagePlanByGroupId[selectedCategory]?.pools.map((pool) => (
                 <ItemDropTarget key={pool.id} id={`pool:${pool.id}`} className="pool-drop-target">
                   <div>
-                    <strong>{pool.label}</strong>
+                    {editingPoolId === pool.id ? <input value={renameDraft} onChange={(event) => setRenameDraft(event.target.value)} autoFocus /> : <strong>{pool.label}</strong>}
                     <small>{pool.items.length} item types; minimum {pool.minimumChests} chest{pool.minimumChests === 1 ? '' : 's'}.</small>
                   </div>
                   <label>
@@ -999,6 +987,17 @@ function App() {
                       onChange={(event) => setSharedPoolChests(pool.id, event.target.value)}
                     />
                   </label>
+                  <button
+                    type="button"
+                    className="edit-control pool-edit-control"
+                    aria-label={`Rename ${pool.label} pool`}
+                    onClick={() => {
+                      if (editingPoolId === pool.id) confirmPoolRename(pool.id);
+                      else { setEditingPoolId(pool.id); setRenameDraft(pool.label); }
+                    }}
+                  >
+                    {editingPoolId === pool.id ? <Check size={15} /> : <Pencil size={14} />}
+                  </button>
                   <button
                     type="button"
                     className="delete-control"
@@ -1068,7 +1067,7 @@ function App() {
           </div>
 
           <div className="footer-actions">
-            <button type="button" className="ghost-button" onClick={resetToDefault}>Reset to survival defaults</button>
+            <button type="button" className="ghost-button" onClick={resetToDefault}>Reset everything</button>
           </div>
         </section>
 

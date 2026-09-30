@@ -359,6 +359,17 @@ input:focus, select:focus {
   font-size: 0.7rem;
 }
 
+.edit-control {
+  display: inline-flex;
+  width: 25px;
+  height: 25px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+}
+
 .group-tab-target .delete-control {
   width: 25px;
   height: 25px;
@@ -446,6 +457,12 @@ input:focus, select:focus {
   position: absolute;
   top: 4px;
   right: 4px;
+}
+
+.pool-drop-target .pool-edit-control {
+  position: absolute;
+  top: 4px;
+  right: 31px;
 }
 
 .pool-drop-target.drag-over,
