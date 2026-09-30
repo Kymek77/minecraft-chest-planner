@@ -574,6 +574,48 @@ function App() {
     setNewStoragePoolName('');
   };
 
+  const deleteStoragePool = (poolId) => {
+    setCustomStoragePools((current) => current.filter((pool) => pool.id !== poolId));
+    setItemPoolOverrides((current) => {
+      const next = { ...current };
+      Object.entries(next).forEach(([itemId, assignedPoolId]) => {
+        if (assignedPoolId === poolId) delete next[itemId];
+      });
+      return next;
+    });
+    setStorageGroupChestOverrides((current) => {
+      const next = { ...current };
+      delete next[poolId];
+      return next;
+    });
+    setReservationSectionOverrides((current) => {
+      const next = { ...current };
+      delete next[poolId];
+      return next;
+    });
+  };
+
+  const deleteStorageGroup = (groupId) => {
+    if (groupId === unassignedStorageGroup.id) return;
+    const deletedPoolIds = new Set(customStoragePools.filter((pool) => pool.groupId === groupId).map((pool) => pool.id));
+    deletedPoolIds.add(`${groupId}-shared`);
+    setCustomStorageGroups((current) => current.filter((group) => group.id !== groupId));
+    setCustomStoragePools((current) => current.filter((pool) => pool.groupId !== groupId));
+    setItemGroupOverrides((current) => Object.fromEntries(
+      Object.entries(current).filter(([, assignedGroupId]) => assignedGroupId !== groupId),
+    ));
+    setItemPoolOverrides((current) => Object.fromEntries(
+      Object.entries(current).filter(([, poolId]) => !deletedPoolIds.has(poolId)),
+    ));
+    setStorageGroupChestOverrides((current) => Object.fromEntries(
+      Object.entries(current).filter(([poolId]) => !deletedPoolIds.has(poolId)),
+    ));
+    setReservationSectionOverrides((current) => Object.fromEntries(
+      Object.entries(current).filter(([reservationId]) => !deletedPoolIds.has(reservationId) && !reservationId.startsWith(`${groupId}-`)),
+    ));
+    if (selectedCategory === groupId) setSelectedCategory(unassignedStorageGroup.id);
+  };
+
   const applyPreset = (presetKey) => {
     const preset = inventoryPresets[presetKey];
     if (!preset) return;
@@ -878,7 +920,7 @@ function App() {
           <div className="toolbar">
             <div className="category-tabs">
               {storageGroups.map((group) => (
-                <ItemDropTarget key={group.id} id={`group:${group.id}`}>
+                <ItemDropTarget key={group.id} id={`group:${group.id}`} className="group-tab-target">
                   <button
                     type="button"
                     className={selectedCategory === group.id ? 'tab active' : 'tab'}
@@ -886,6 +928,16 @@ function App() {
                   >
                     {group.label}
                   </button>
+                  {group.id !== unassignedStorageGroup.id && (
+                    <button
+                      type="button"
+                      className="delete-control"
+                      aria-label={`Delete ${group.label} group`}
+                      onClick={() => deleteStorageGroup(group.id)}
+                    >
+                      Delete
+                    </button>
+                  )}
                 </ItemDropTarget>
               ))}
             </div>
@@ -936,6 +988,16 @@ function App() {
                       onChange={(event) => setSharedPoolChests(pool.id, event.target.value)}
                     />
                   </label>
+                  {!pool.isDefault && (
+                    <button
+                      type="button"
+                      className="delete-control"
+                      aria-label={`Delete ${pool.label} pool`}
+                      onClick={() => deleteStoragePool(pool.id)}
+                    >
+                      Delete
+                    </button>
+                  )}
                 </ItemDropTarget>
               ))}
             </div>
