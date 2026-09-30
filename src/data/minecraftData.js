@@ -224,7 +224,11 @@ const deriveItemFacets = (item, baseClassification) => {
                                   : name.includes('block')
                                     ? 'Block'
                                     : 'Base';
-  const isBuildingForm = ['Block', 'Planks', 'Log', 'Slab', 'Stairs', 'Wall', 'Fence', 'Fence Gate', 'Door', 'Trapdoor', 'Button', 'Pressure Plate', 'Sign', 'Hanging Sign'].includes(form);
+  const buildingForms = ['Block', 'Planks', 'Log', 'Slab', 'Stairs', 'Wall', 'Fence', 'Fence Gate', 'Door', 'Trapdoor', 'Button', 'Pressure Plate', 'Sign', 'Hanging Sign'];
+  const isBuildingMaterial = buildingForms.includes(form) ||
+    name === 'glass' || name.includes('glass_pane') || name.includes('terracotta') ||
+    name.includes('concrete') || name.endsWith('_wool') || name.endsWith('_carpet') ||
+    name.endsWith('_brick') || name.endsWith('_bricks') || name.endsWith('_coral_block');
   const isTechnical = baseClassification.category === 'Technical';
   const isArmor = item.enchantCategories?.some((category) => category.includes('armor'));
   const isWeapon = item.enchantCategories?.some((category) => ['weapon', 'sword', 'bow', 'crossbow', 'trident', 'mace'].includes(category));
@@ -273,23 +277,18 @@ const deriveItemFacets = (item, baseClassification) => {
   } else if (isResource) {
     category = 'Resources';
     family = name.includes('ore') ? 'Ores' : name.includes('ingot') || name.includes('nugget') ? 'Metals' : name.includes('diamond') || name.includes('emerald') ? 'Gems' : 'Materials';
-  } else if (isBuildingForm || name.includes('stone') || name.includes('plank') || name.includes('log') || name.includes('wood') || name.includes('glass') || name.includes('terracotta') || name.includes('concrete')) {
+  } else if (isBuildingMaterial) {
     category = 'Building';
     family = material || (name.includes('stone') || name.includes('deepslate') ? 'Stone' : name.includes('glass') ? 'Glass' : name.includes('terracotta') || name.includes('concrete') ? 'Colored Blocks' : dimension === 'Nether' ? 'Nether Blocks' : 'General Building');
-  }
-
-  if (category === 'Utility') {
-    category = 'Tools & Equipment';
-    family = family || 'General Utility';
-  } else if (category === 'Rare') {
+  } else if (baseClassification.category === 'Nether') {
+    category = 'Resources';
+    family = 'Nether Materials';
+  } else if (baseClassification.category === 'Rare') {
     category = 'Decoration & Collectibles';
     family = 'Rare and Unique';
-  } else if (category === 'Nether') {
-    category = 'Building';
-    family = 'Nether Blocks';
-  } else if (category === 'Wood') {
-    category = 'Building';
-    family = material || 'Wood';
+  } else if (baseClassification.category === 'Utility') {
+    category = 'Tools & Equipment';
+    family = 'General Utility';
   }
 
   return {
@@ -311,7 +310,7 @@ const normalizeItem = (item) => {
     id: `minecraft:${item.name}`,
     name: item.displayName || item.name,
     ...classification,
-    stack: item.stackSize || 64,
+    stack: item.stackSize || item.stack || 64,
     maxDurability: item.maxDurability || null,
   };
 };
@@ -414,4 +413,4 @@ export const fetchMinecraftItems = async (version, metadataFallbackVersion) => {
   };
 };
 
-export const fallbackMinecraftItems = fallbackItems;
+export const fallbackMinecraftItems = fallbackItems.map(normalizeItem);

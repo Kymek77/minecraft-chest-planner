@@ -44,6 +44,7 @@ function App() {
   const [chestType, setChestType] = useState('double');
   const [selectedCategory, setSelectedCategory] = useState('Building');
   const [selectedSubcategory, setSelectedSubcategory] = useState('All');
+  const [selectedForm, setSelectedForm] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPreset, setSelectedPreset] = useState('survival');
   const [itemScope, setItemScope] = useState('survival');
@@ -270,11 +271,22 @@ function App() {
     return ['All', ...Array.from(unique).sort()];
   }, [minecraftItems, selectedCategory]);
 
+  const formOptions = useMemo(() => {
+    const unique = new Set();
+    orderedAvailableItems.forEach((item) => {
+      if (item.category === selectedCategory && (selectedSubcategory === 'All' || item.subcategory === selectedSubcategory)) {
+        unique.add(item.form);
+      }
+    });
+    return ['All', ...Array.from(unique).sort()];
+  }, [orderedAvailableItems, selectedCategory, selectedSubcategory]);
+
   const filteredItems = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
     return orderedAvailableItems.filter((item) => {
       const categoryMatch = item.category === selectedCategory;
       const subcategoryMatch = selectedSubcategory === 'All' || item.subcategory === selectedSubcategory;
+      const formMatch = selectedForm === 'All' || item.form === selectedForm;
       const queryMatch =
         normalizedQuery.length === 0 ||
         item.name.toLowerCase().includes(normalizedQuery) ||
@@ -282,9 +294,9 @@ function App() {
         item.category.toLowerCase().includes(normalizedQuery) ||
         item.subcategory.toLowerCase().includes(normalizedQuery);
 
-      return categoryMatch && subcategoryMatch && queryMatch;
+      return categoryMatch && subcategoryMatch && formMatch && queryMatch;
     });
-  }, [orderedAvailableItems, searchQuery, selectedCategory, selectedSubcategory]);
+  }, [orderedAvailableItems, searchQuery, selectedCategory, selectedForm, selectedSubcategory]);
 
   const categorySummary = useMemo(
     () =>
@@ -525,6 +537,7 @@ function App() {
                   onClick={() => {
                     setSelectedCategory(category);
                     setSelectedSubcategory('All');
+                    setSelectedForm('All');
                   }}
                 >
                   {category}
@@ -548,9 +561,25 @@ function App() {
                 key={subcategory}
                 type="button"
                 className={selectedSubcategory === subcategory ? 'chip active' : 'chip'}
-                onClick={() => setSelectedSubcategory(subcategory)}
+                onClick={() => {
+                  setSelectedSubcategory(subcategory);
+                  setSelectedForm('All');
+                }}
               >
                 {subcategory}
+              </button>
+            ))}
+          </div>
+
+          <div className="subcategory-row">
+            {formOptions.map((form) => (
+              <button
+                key={form}
+                type="button"
+                className={selectedForm === form ? 'chip active' : 'chip'}
+                onClick={() => setSelectedForm(form)}
+              >
+                {form}
               </button>
             ))}
           </div>
