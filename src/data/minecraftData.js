@@ -224,16 +224,73 @@ const deriveItemFacets = (item, baseClassification) => {
                                   : name.includes('block')
                                     ? 'Block'
                                     : 'Base';
-  const family = baseClassification.category === 'Building'
-    ? (material || (name.includes('stone') || name.includes('deepslate') ? 'Stone' : name.includes('glass') ? 'Glass' : name.includes('terracotta') || name.includes('concrete') ? 'Colored Blocks' : dimension === 'Nether' ? 'Nether Blocks' : 'General Building'))
-    : baseClassification.category === 'Resources'
-      ? (name.includes('ore') ? 'Ores' : name.includes('ingot') || name.includes('nugget') ? 'Metals' : name.includes('diamond') || name.includes('emerald') ? 'Gems' : 'Materials')
-      : baseClassification.subcategory;
-  const category = baseClassification.category === 'Wood' || baseClassification.category === 'Nether'
-    ? (form !== 'Base' || name.includes('block') || name.includes('stone') || name.includes('plank') || name.includes('log') || name.includes('stem') ? 'Building' : baseClassification.category === 'Wood' ? 'Farming' : 'Resources')
-    : baseClassification.category === 'Rare'
-      ? (name.includes('ore') || name.includes('ingot') || name.includes('shard') ? 'Resources' : 'Decor')
-      : baseClassification.category;
+  const isBuildingForm = ['Block', 'Planks', 'Log', 'Slab', 'Stairs', 'Wall', 'Fence', 'Fence Gate', 'Door', 'Trapdoor', 'Button', 'Pressure Plate', 'Sign', 'Hanging Sign'].includes(form);
+  const isTechnical = baseClassification.category === 'Technical';
+  const isArmor = item.enchantCategories?.some((category) => category.includes('armor'));
+  const isWeapon = item.enchantCategories?.some((category) => ['weapon', 'sword', 'bow', 'crossbow', 'trident', 'mace'].includes(category));
+  const isTool = item.enchantCategories?.some((category) => ['mining', 'fishing'].includes(category));
+  const isFood = baseClassification.category === 'Food';
+  const isFarming = baseClassification.category === 'Farming' || ['sapling', 'propagule', 'flower', 'mushroom', 'fungus', 'roots', 'seed'].some((part) => name.includes(part));
+  const isRedstone = baseClassification.category === 'Mechanics';
+  const isTransport = name.includes('boat') || name.includes('minecart') || name.includes('rail');
+  const isMobDrop = baseClassification.category === 'Mob Drops' || name.endsWith('_spawn_egg') || name.endsWith('_head') || name.endsWith('_scute');
+  const isDecoration = baseClassification.category === 'Decor' || name.includes('banner') || name.includes('dye') || name.includes('painting') || name.includes('music_disc');
+  const isResource = baseClassification.category === 'Resources' || name.includes('ore') || name.includes('ingot') || name.includes('nugget') || name.includes('raw_');
+
+  let category = baseClassification.category;
+  let family = baseClassification.subcategory;
+
+  if (isTechnical) {
+    category = 'Technical';
+    family = 'Command and test items';
+  } else if (isArmor) {
+    category = 'Combat';
+    family = 'Armor';
+  } else if (isWeapon) {
+    category = 'Combat';
+    family = 'Weapons';
+  } else if (isTool) {
+    category = 'Tools & Equipment';
+    family = name.includes('pickaxe') ? 'Mining' : name.includes('hoe') ? 'Farming' : name.includes('fishing') ? 'Fishing' : 'General Tools';
+  } else if (isFood) {
+    category = 'Food & Brewing';
+    family = name.includes('potion') || name.includes('bottle') ? 'Brewing' : name.includes('cooked_') ? 'Cooked Food' : name.includes('stew') || name.includes('soup') ? 'Meals' : 'Food';
+  } else if (isFarming) {
+    category = 'Farming & Nature';
+    family = name.includes('sapling') || name.includes('propagule') ? 'Tree Growing' : name.includes('flower') || name.includes('mushroom') || name.includes('fungus') ? 'Plants' : 'Crops';
+  } else if (isRedstone) {
+    category = 'Redstone & Automation';
+    family = name.includes('rail') ? 'Rail Systems' : name.includes('piston') || name.includes('observer') || name.includes('hopper') ? 'Automation' : 'Redstone';
+  } else if (isTransport) {
+    category = 'Transport & Storage';
+    family = name.includes('rail') ? 'Rail Systems' : name.includes('boat') ? 'Boats' : name.includes('minecart') ? 'Minecarts' : 'Storage';
+  } else if (isMobDrop) {
+    category = 'Mob Drops';
+    family = name.endsWith('_spawn_egg') ? 'Spawn Eggs' : name.includes('head') || name.includes('skull') ? 'Mob Trophies' : 'Mob Materials';
+  } else if (isDecoration) {
+    category = 'Decoration & Collectibles';
+    family = name.includes('dye') || name.includes('banner') ? 'Color and Patterns' : name.includes('disc') || name.includes('painting') ? 'Collectibles' : 'Decor';
+  } else if (isResource) {
+    category = 'Resources';
+    family = name.includes('ore') ? 'Ores' : name.includes('ingot') || name.includes('nugget') ? 'Metals' : name.includes('diamond') || name.includes('emerald') ? 'Gems' : 'Materials';
+  } else if (isBuildingForm || name.includes('stone') || name.includes('plank') || name.includes('log') || name.includes('wood') || name.includes('glass') || name.includes('terracotta') || name.includes('concrete')) {
+    category = 'Building';
+    family = material || (name.includes('stone') || name.includes('deepslate') ? 'Stone' : name.includes('glass') ? 'Glass' : name.includes('terracotta') || name.includes('concrete') ? 'Colored Blocks' : dimension === 'Nether' ? 'Nether Blocks' : 'General Building');
+  }
+
+  if (category === 'Utility') {
+    category = 'Tools & Equipment';
+    family = family || 'General Utility';
+  } else if (category === 'Rare') {
+    category = 'Decoration & Collectibles';
+    family = 'Rare and Unique';
+  } else if (category === 'Nether') {
+    category = 'Building';
+    family = 'Nether Blocks';
+  } else if (category === 'Wood') {
+    category = 'Building';
+    family = material || 'Wood';
+  }
 
   return {
     category,
@@ -262,15 +319,14 @@ const normalizeItem = (item) => {
 export const itemCategories = [
   'Building',
   'Resources',
-  'Mechanics',
+  'Redstone & Automation',
   'Combat',
-  'Food',
-  'Utility',
+  'Food & Brewing',
   'Mob Drops',
-  'Decor',
-  'Rare',
-  'Tools',
-  'Farming',
+  'Decoration & Collectibles',
+  'Tools & Equipment',
+  'Farming & Nature',
+  'Transport & Storage',
   'Technical',
   'Unclassified',
 ];
