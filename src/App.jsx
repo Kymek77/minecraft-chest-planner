@@ -48,7 +48,9 @@ function App() {
   const [itemOrder, setItemOrder] = useState('class');
   const [includedItems, setIncludedItems] = useState(() => makeIncludedItemMap(fallbackMinecraftItems));
   const [itemGroupOverrides, setItemGroupOverrides] = useState({});
+  const [itemDedicatedChestOverrides, setItemDedicatedChestOverrides] = useState({});
   const [customStorageGroups, setCustomStorageGroups] = useState([]);
+  const [storageGroupChestOverrides, setStorageGroupChestOverrides] = useState({});
   const [newStorageGroupName, setNewStorageGroupName] = useState('');
 
   useEffect(() => {
@@ -135,7 +137,6 @@ function App() {
   };
 
   const chestSlotsPerChest = CHEST_CAPACITY[chestType];
-  const totalSlots = storageConfig.totalChests * chestSlotsPerChest;
   const storageGroups = useMemo(() => [unassignedStorageGroup, ...customStorageGroups], [customStorageGroups]);
   const storageGroupById = useMemo(
     () => Object.fromEntries(storageGroups.map((group) => [group.id, group])),
@@ -170,6 +171,61 @@ function App() {
     [orderedAvailableItems, includedItems],
   );
 
+  const storagePlanByGroupId = useMemo(
+    () => Object.fromEntries(storageGroups.map((group) => {
+      const items = selectedItems.filter((item) => itemStorageGroups[item.id] === group.id);
+      const dedicatedItems = items
+        .map((item) => ({
+          item,
+          chestCount: Math.max(0, Number(itemDedicatedChestOverrides[item.id]) || 0),
+        }))
+        .filter(({ chestCount }) => chestCount > 0);
+      const sharedItems = items.filter((item) => !itemDedicatedChestOverrides[item.id]);
+      const minimumSharedChests = Math.ceil(sharedItems.length / chestSlotsPerChest);
+      const requestedSharedChests = storageGroupChestOverrides[group.id];
+      const sharedChests = requestedSharedChests === undefined
+        ? minimumSharedChests
+        : Math.max(minimumSharedChests, Number(requestedSharedChests) || 0);
+
+      return [group.id, {
+        ...group,
+        items,
+        sharedItems,
+        dedicatedItems,
+        minimumSharedChests,
+        sharedChests,
+        dedicatedChests: dedicatedItems.reduce((total, entry) => total + entry.chestCount, 0),
+      }];
+    })),
+    [chestSlotsPerChest, itemDedicatedChestOverrides, itemStorageGroups, selectedItems, storageGroupChestOverrides, storageGroups],
+  );
+
+  const storagePlanEntries = useMemo(
+    () => storageGroups.flatMap((group) => {
+      const groupPlan = storagePlanByGroupId[group.id];
+      const sharedEntry = groupPlan.sharedChests > 0 ? [{
+        id: `${group.id}-shared`,
+        label: `${group.label} shared storage`,
+        chestCount: groupPlan.sharedChests,
+        itemPreview: groupPlan.sharedItems.slice(0, 3).map((item) => item.name),
+      }] : [];
+      const dedicatedEntries = groupPlan.dedicatedItems.map(({ item, chestCount }) => ({
+        id: `${group.id}-${item.id}`,
+        label: item.name,
+        chestCount,
+        itemPreview: [item.name],
+      }));
+
+      return [...dedicatedEntries, ...sharedEntry];
+    }),
+    [storageGroups, storagePlanByGroupId],
+  );
+
+  const reservedChests = useMemo(
+    () => storagePlanEntries.reduce((total, entry) => total + entry.chestCount, 0),
+    [storagePlanEntries],
+  );
+
   const categoryGroups = useMemo(() => {
     const groups = {};
 
@@ -177,7 +233,7 @@ function App() {
       const groupId = itemStorageGroups[item.id];
       if (!groups[groupId]) {
         groups[groupId] = {
-          category: storageGroupById[groupId].label,
+          category: storageGroupById[groupId]?.label || unassignedStorageGroup.label,
           groupId,
           itemCount: 0,
           items: [],
@@ -212,61 +268,58 @@ function App() {
     return generated;
   }, [storageConfig, chestSlotsPerChest]);
 
-  const orderedCategoryEntries = useMemo(
-    () => Object.entries(categoryGroups).sort(([, a], [, b]) => b.itemCount - a.itemCount),
-    [categoryGroups],
-  );
-
   const sectionPlans = useMemo(() => {
-    const remainingByCategory = Object.fromEntries(
-      orderedCategoryEntries.map(([category, group]) => [category, group.itemCount]),
+    const remainingByReservation = Object.fromEntries(
+      storagePlanEntries.map((entry) => [entry.id, entry.chestCount]),
     );
 
     const allocations = sections.map((section) => ({
       ...section,
       categories: [],
-      remainingSlots: section.slotCapacity,
+      remainingChests: section.chestCount,
     }));
 
     for (let sectionIndex = 0; sectionIndex < allocations.length; sectionIndex += 1) {
       const section = allocations[sectionIndex];
-      let remainingCapacity = section.remainingSlots;
+      let remainingCapacity = section.remainingChests;
 
-      for (const [category, group] of orderedCategoryEntries) {
+      for (const entry of storagePlanEntries) {
         if (remainingCapacity <= 0) break;
-        if ((remainingByCategory[category] ?? 0) <= 0) continue;
+        if ((remainingByReservation[entry.id] ?? 0) <= 0) continue;
 
-        const allocated = Math.min(remainingByCategory[category], remainingCapacity);
+        const allocated = Math.min(remainingByReservation[entry.id], remainingCapacity);
         if (allocated <= 0) continue;
 
         section.categories.push({
-          category,
-          usedSlots: allocated,
-          itemPreview: group.items.slice(0, 3).map((item) => item.name),
+          category: entry.label,
+          usedChests: allocated,
+          itemPreview: entry.itemPreview,
         });
 
-        remainingByCategory[category] -= allocated;
+        remainingByReservation[entry.id] -= allocated;
         remainingCapacity -= allocated;
       }
 
-      section.remainingSlots = remainingCapacity;
+      section.remainingChests = remainingCapacity;
     }
 
     return allocations;
-  }, [sections, orderedCategoryEntries]);
+  }, [sections, storagePlanEntries]);
 
   const overallStats = useMemo(() => {
     const itemTypeCount = selectedItems.length;
     const categoryCount = Object.keys(categoryGroups).length;
-    const fillRate = totalSlots > 0 ? (selectedItems.length / totalSlots) * 100 : 0;
+    const fillRate = storageConfig.totalChests > 0 ? (reservedChests / storageConfig.totalChests) * 100 : 0;
 
     return {
       itemTypeCount,
       categoryCount,
       fillRate,
+      reservedChests,
+      availableChests: storageConfig.totalChests - reservedChests,
       totalSections: sections.length,
     };
-  }, [categoryGroups, selectedItems, sections, totalSlots]);
+  }, [categoryGroups, reservedChests, sections, selectedItems, storageConfig.totalChests]);
 
   const filteredItems = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -284,8 +337,8 @@ function App() {
 
   const categorySummary = useMemo(
     () =>
-      Object.entries(categoryGroups).map(([category, data]) => ({
-        category,
+      Object.entries(categoryGroups).map(([, data]) => ({
+        category: data.category,
         items: data.itemCount,
       })),
     [categoryGroups],
@@ -311,6 +364,17 @@ function App() {
     setItemGroupOverrides((current) => ({ ...current, [itemId]: groupId }));
   };
 
+  const setItemDedicatedChests = (itemId, rawValue) => {
+    const chestCount = Math.max(0, Math.floor(Number(rawValue) || 0));
+    setItemDedicatedChestOverrides((current) => ({ ...current, [itemId]: chestCount }));
+  };
+
+  const setSharedGroupChests = (groupId, rawValue) => {
+    const minimum = storagePlanByGroupId[groupId]?.minimumSharedChests || 0;
+    const chestCount = Math.max(minimum, Math.floor(Number(rawValue) || 0));
+    setStorageGroupChestOverrides((current) => ({ ...current, [groupId]: chestCount }));
+  };
+
   const addStorageGroup = () => {
     const label = newStorageGroupName.trim();
     if (!label) return;
@@ -332,7 +396,9 @@ function App() {
     setSelectedPreset('survival');
     setIncludedItems(makeIncludedItemMap(minecraftItems));
     setItemGroupOverrides({});
+    setItemDedicatedChestOverrides({});
     setCustomStorageGroups([]);
+    setStorageGroupChestOverrides({});
     setSelectedCategory(unassignedStorageGroup.id);
   };
 
@@ -346,7 +412,9 @@ function App() {
         .filter(([, selected]) => selected)
         .map(([itemId]) => itemId),
       itemGroupOverrides,
+      itemDedicatedChestOverrides,
       customStorageGroups,
+      storageGroupChestOverrides,
       generatedAt: new Date().toISOString(),
       sections: sectionPlans,
     };
@@ -373,17 +441,38 @@ function App() {
           setIncludedItems(makeIncludedItemMap(minecraftItems, parsed.includedItems));
         }
 
+        const importedGroups = Array.isArray(parsed.customStorageGroups)
+          ? parsed.customStorageGroups.filter((group) => typeof group?.id === 'string' && typeof group?.label === 'string')
+          : [];
+        const importedGroupIds = new Set([unassignedStorageGroup.id, ...importedGroups.map((group) => group.id)]);
+
         if (parsed.itemGroupOverrides && typeof parsed.itemGroupOverrides === 'object') {
           setItemGroupOverrides(
             Object.fromEntries(
-              Object.entries(parsed.itemGroupOverrides).filter(([, groupId]) => storageGroupById[groupId]),
+              Object.entries(parsed.itemGroupOverrides).filter(([, groupId]) => importedGroupIds.has(groupId)),
             ),
           );
         }
 
-        if (Array.isArray(parsed.customStorageGroups)) {
-          setCustomStorageGroups(
-            parsed.customStorageGroups.filter((group) => typeof group?.id === 'string' && typeof group?.label === 'string'),
+        setCustomStorageGroups(importedGroups);
+
+        if (parsed.itemDedicatedChestOverrides && typeof parsed.itemDedicatedChestOverrides === 'object') {
+          setItemDedicatedChestOverrides(
+            Object.fromEntries(
+              Object.entries(parsed.itemDedicatedChestOverrides)
+                .filter(([itemId, chestCount]) => minecraftItems.some((item) => item.id === itemId) && Number(chestCount) >= 0)
+                .map(([itemId, chestCount]) => [itemId, Math.floor(Number(chestCount))]),
+            ),
+          );
+        }
+
+        if (parsed.storageGroupChestOverrides && typeof parsed.storageGroupChestOverrides === 'object') {
+          setStorageGroupChestOverrides(
+            Object.fromEntries(
+              Object.entries(parsed.storageGroupChestOverrides)
+                .filter(([groupId, chestCount]) => importedGroupIds.has(groupId) && Number(chestCount) >= 0)
+                .map(([groupId, chestCount]) => [groupId, Math.floor(Number(chestCount))]),
+            ),
           );
         }
 
@@ -440,7 +529,7 @@ function App() {
           <label>
             Item ordering
             <select value={itemOrder} onChange={(event) => setItemOrder(event.target.value)}>
-              <option value="class">Class, subclass, then name</option>
+              <option value="class">Storage group, then name</option>
               <option value="alphabetical">Alphabetical only</option>
             </select>
           </label>
@@ -555,6 +644,27 @@ function App() {
             <button type="button" className="secondary-button" onClick={addStorageGroup}>Add group</button>
           </div>
 
+          <div className="reservation-control">
+            <label>
+              Shared chests for {storagePlanByGroupId[selectedCategory]?.label}
+              <input
+                type="number"
+                min={storagePlanByGroupId[selectedCategory]?.minimumSharedChests || 0}
+                value={storagePlanByGroupId[selectedCategory]?.sharedChests || 0}
+                onChange={(event) => setSharedGroupChests(selectedCategory, event.target.value)}
+              />
+            </label>
+            <small>
+              {storagePlanByGroupId[selectedCategory]?.sharedItems.length || 0} shared item types; minimum {storagePlanByGroupId[selectedCategory]?.minimumSharedChests || 0} chest{storagePlanByGroupId[selectedCategory]?.minimumSharedChests === 1 ? '' : 's'}.
+            </small>
+          </div>
+
+          {overallStats.availableChests < 0 && (
+            <p className="capacity-warning" role="alert">
+              Reservations exceed the configured storage by {Math.abs(overallStats.availableChests)} chest{Math.abs(overallStats.availableChests) === 1 ? '' : 's'}.
+            </p>
+          )}
+
           <div className="inventory-grid">
             {filteredItems.map((item) => {
               const checked = !!includedItems[item.id];
@@ -583,6 +693,16 @@ function App() {
                       {storageGroups.map((group) => <option key={group.id} value={group.id}>{group.label}</option>)}
                     </select>
                   </label>
+                  <label className="item-group-control">
+                    Dedicated chests
+                    <input
+                      type="number"
+                      min="0"
+                      value={itemDedicatedChestOverrides[item.id] || 0}
+                      onChange={(event) => setItemDedicatedChests(item.id, event.target.value)}
+                    />
+                    <small>{itemDedicatedChestOverrides[item.id] ? 'Reserved for this item only' : 'Uses the shared group chests'}</small>
+                  </label>
                 </div>
               );
             })}
@@ -606,12 +726,16 @@ function App() {
               <strong>{overallStats.categoryCount.toLocaleString()}</strong>
             </div>
             <div className="stat-card">
-              <span>Chest capacity</span>
-              <strong>{totalSlots.toLocaleString()}</strong>
+              <span>Reserved chests</span>
+              <strong>{overallStats.reservedChests.toLocaleString()} / {storageConfig.totalChests.toLocaleString()}</strong>
             </div>
             <div className="stat-card">
-              <span>Fill rate</span>
+              <span>Reserved capacity</span>
               <strong>{overallStats.fillRate.toFixed(1)}%</strong>
+            </div>
+            <div className="stat-card">
+              <span>Available chests</span>
+              <strong>{overallStats.availableChests.toLocaleString()}</strong>
             </div>
           </div>
 
@@ -669,7 +793,7 @@ function App() {
                         <strong>{category.category}</strong>
                         <small>{category.itemPreview.join(', ') || 'mixed item types'}</small>
                       </div>
-                      <span>{category.usedSlots} slots</span>
+                      <span>{category.usedChests} chests</span>
                     </div>
                   ))}
                 </div>
