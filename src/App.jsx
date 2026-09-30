@@ -9,6 +9,7 @@ import {
   fallbackMinecraftItems,
   nonSurvivalItemIds,
 } from './data/minecraftData';
+import { defaultSurvivalPreset26_3 } from './data/defaultSurvivalPreset26_3';
 
 const CHEST_CAPACITY = {
   single: 27,
@@ -21,95 +22,6 @@ const defaultStorageConfig = {
   totalSections: 8,
 };
 const DEFAULT_MINECRAFT_VERSION = '26.3';
-
-const survivalPresetGroups = [
-  { id: 'preset-building', label: 'Building blocks', chests: 120 },
-  { id: 'preset-wood', label: 'Wood and plants', chests: 75 },
-  { id: 'preset-materials', label: 'Ores and materials', chests: 80 },
-  { id: 'preset-tools', label: 'Tools and equipment', chests: 50 },
-  { id: 'preset-food', label: 'Food and farming', chests: 60 },
-  { id: 'preset-mobs', label: 'Mob drops and combat', chests: 60 },
-  { id: 'preset-redstone', label: 'Redstone and utility', chests: 50 },
-  { id: 'preset-nether', label: 'Nether and End', chests: 55 },
-  { id: 'preset-misc', label: 'Decorations and misc', chests: 50 },
-];
-
-const survivalPresetGroupForItem = (item) => {
-  const id = item.id.replace(/^minecraft:/, '');
-  if (/(nether|blaze|ghast|wither|shulker|chorus|purpur|end_|dragon|obsidian)/.test(id)) return 'preset-nether';
-  if (/(sword|pickaxe|axe|shovel|hoe|helmet|chestplate|leggings|boots|shield|elytra|bow|crossbow|trident|mace|fishing_rod|shears|flint_and_steel|compass|clock|map|bucket)/.test(id)) return 'preset-tools';
-  if (/(beef|pork|chicken|mutton|rabbit|cod|salmon|potato|carrot|beetroot|melon|apple|berry|bread|cookie|cake|stew|soup|pie|wheat|seeds|crop|sugar_cane|cocoa|egg|milk|honey|kelp)/.test(id)) return 'preset-food';
-  if (/(rotten|bone|string|spider|gunpowder|slime|leather|feather|phantom|ender_pearl|totem|skull|head|disc|arrow|fire_charge|magma_cream)/.test(id)) return 'preset-mobs';
-  if (/(redstone|repeater|comparator|piston|observer|hopper|dispenser|dropper|lever|button|pressure_plate|tripwire|daylight|target|rail|tnt|note_block|jukebox|lectern|crafter)/.test(id)) return 'preset-redstone';
-  if (/(log|wood|planks|sapling|leaves|mangrove|bamboo|cactus|vine|moss|flower|azalea|fungus|roots|lily|dirt|grass|podzol|mycelium)/.test(id)) return 'preset-wood';
-  if (/(diamond|emerald|iron|gold|copper|coal|lapis|quartz|amethyst|raw_|ingot|nugget|brick|clay|flint|stick|paper|book|dye|glass|terracotta|concrete|wool)/.test(id)) return 'preset-materials';
-  if (item.isBlock) return 'preset-building';
-  return 'preset-misc';
-};
-
-const defaultSurvivalDedicatedReservations = {
-  'minecraft:cobblestone': 70, 'minecraft:stone': 40, 'minecraft:cobbled_deepslate': 35, 'minecraft:dirt': 25, 'minecraft:sand': 20, 'minecraft:gravel': 15,
-  'minecraft:oak_log': 20, 'minecraft:oak_planks': 30, 'minecraft:spruce_log': 10, 'minecraft:spruce_planks': 10,
-  'minecraft:iron_ingot': 35, 'minecraft:coal': 30, 'minecraft:redstone': 28, 'minecraft:copper_ingot': 10, 'minecraft:gold_ingot': 10, 'minecraft:diamond': 5,
-  'minecraft:wheat': 20, 'minecraft:carrot': 15, 'minecraft:potato': 15, 'minecraft:bamboo': 10, 'minecraft:cooked_beef': 5,
-  'minecraft:rotten_flesh': 15, 'minecraft:bone': 15, 'minecraft:string': 10, 'minecraft:gunpowder': 10, 'minecraft:arrow': 10,
-  'minecraft:netherrack': 25, 'minecraft:end_stone': 10, 'minecraft:rail': 15,
-};
-
-const defaultSurvivalPools = [
-  ['preset-building', 'Acacia doors and trapdoors', ['acacia_door', 'acacia_trapdoor']],
-  ['preset-building', 'Acacia fences and gates', ['acacia_fence', 'acacia_fence_gate']],
-  ['preset-building', 'Acacia slabs and stairs', ['acacia_slab', 'acacia_stairs']],
-  ['preset-building', 'Oak doors and trapdoors', ['oak_door', 'oak_trapdoor']],
-  ['preset-building', 'Oak fences and gates', ['oak_fence', 'oak_fence_gate']],
-  ['preset-building', 'Oak slabs and stairs', ['oak_slab', 'oak_stairs']],
-  ['preset-building', 'Spruce building forms', ['spruce_door', 'spruce_trapdoor', 'spruce_fence', 'spruce_fence_gate', 'spruce_slab', 'spruce_stairs']],
-  ['preset-building', 'Birch building forms', ['birch_door', 'birch_trapdoor', 'birch_fence', 'birch_fence_gate', 'birch_slab', 'birch_stairs']],
-  ['preset-building', 'Jungle building forms', ['jungle_door', 'jungle_trapdoor', 'jungle_fence', 'jungle_fence_gate', 'jungle_slab', 'jungle_stairs']],
-  ['preset-building', 'Dark oak building forms', ['dark_oak_door', 'dark_oak_trapdoor', 'dark_oak_fence', 'dark_oak_fence_gate', 'dark_oak_slab', 'dark_oak_stairs']],
-  ['preset-building', 'Mangrove building forms', ['mangrove_door', 'mangrove_trapdoor', 'mangrove_fence', 'mangrove_fence_gate', 'mangrove_slab', 'mangrove_stairs']],
-  ['preset-building', 'Cherry building forms', ['cherry_door', 'cherry_trapdoor', 'cherry_fence', 'cherry_fence_gate', 'cherry_slab', 'cherry_stairs']],
-  ['preset-building', 'Stone building forms', ['stone_slab', 'stone_stairs', 'stone_brick_slab', 'stone_brick_stairs', 'stone_brick_wall', 'stone_bricks']],
-  ['preset-building', 'Deepslate building forms', ['deepslate_bricks', 'deepslate_tiles', 'cobbled_deepslate_slab', 'cobbled_deepslate_stairs', 'cobbled_deepslate_wall', 'polished_deepslate']],
-  ['preset-building', 'Sandstone building forms', ['sandstone', 'sandstone_slab', 'sandstone_stairs', 'sandstone_wall', 'cut_sandstone', 'chiseled_sandstone']],
-  ['preset-building', 'Glass and lighting', ['glass_pane', 'tinted_glass', 'torch', 'lantern', 'soul_lantern', 'candle']],
-  ['preset-materials', 'Dyes and pigments', ['white_dye', 'black_dye', 'red_dye', 'blue_dye', 'green_dye', 'yellow_dye']],
-  ['preset-materials', 'Textiles and hides', ['leather', 'rabbit_hide', 'feather', 'ink_sac', 'glow_ink_sac', 'rabbit_foot']],
-  ['preset-tools', 'Enchanting and smithing', ['book', 'enchanted_book', 'anvil', 'grindstone', 'smithing_table', 'experience_bottle']],
-  ['preset-tools', 'Rare equipment', ['elytra', 'trident', 'mace', 'shield', 'spyglass', 'recovery_compass']],
-  ['preset-food', 'Prepared food', ['bread', 'cooked_porkchop', 'cooked_chicken', 'cooked_mutton', 'cooked_cod', 'golden_carrot']],
-  ['preset-food', 'Seeds and starters', ['wheat_seeds', 'beetroot_seeds', 'melon_seeds', 'pumpkin_seeds', 'cocoa_beans', 'sugar_cane']],
-  ['preset-mobs', 'Rare trophies', ['wither_skeleton_skull', 'dragon_egg', 'totem_of_undying', 'music_disc_13', 'saddle', 'diamond_horse_armor']],
-  ['preset-mobs', 'Uncommon mob drops', ['slime_ball', 'spider_eye', 'phantom_membrane', 'ender_pearl', 'blaze_rod', 'ghast_tear']],
-  ['preset-redstone', 'Rails and minecarts', ['powered_rail', 'detector_rail', 'activator_rail', 'minecart', 'chest_minecart', 'hopper_minecart']],
-  ['preset-redstone', 'Redstone machines', ['piston', 'sticky_piston', 'observer', 'hopper', 'dispenser', 'dropper']],
-  ['preset-redstone', 'Redstone circuits', ['repeater', 'comparator', 'redstone_torch', 'lever', 'tripwire_hook', 'daylight_detector']],
-  ['preset-nether', 'Nether finds', ['soul_sand', 'soul_soil', 'glowstone_dust', 'nether_wart', 'magma_cream', 'nether_star']],
-  ['preset-nether', 'Bastion loot', ['ancient_debris', 'netherite_scrap', 'gilded_blackstone', 'piglin_banner_pattern', 'snout_armor_trim_smithing_template', 'lodestone']],
-  ['preset-nether', 'End finds', ['chorus_fruit', 'popped_chorus_fruit', 'purpur_block', 'shulker_shell', 'end_crystal', 'dragon_breath']],
-  ['preset-misc', 'Display decorations', ['painting', 'item_frame', 'glow_item_frame', 'armor_stand', 'flower_pot', 'lectern']],
-  ['preset-misc', 'Map and exploration items', ['map', 'filled_map', 'compass', 'clock', 'name_tag', 'lead']],
-].map(([groupId, label, itemNames], index) => ({
-  id: `default-survival-pool-${index + 1}`,
-  groupId,
-  label,
-  itemIds: itemNames.map((itemName) => `minecraft:${itemName}`),
-}));
-
-const defaultSurvivalDedicatedGroups = {
-  'preset-building': ['cobblestone', 'stone', 'cobbled_deepslate', 'dirt', 'sand', 'gravel'],
-  'preset-wood': ['oak_log', 'oak_planks', 'spruce_log', 'spruce_planks'],
-  'preset-materials': ['iron_ingot', 'coal', 'redstone', 'copper_ingot', 'gold_ingot', 'diamond'],
-  'preset-food': ['wheat', 'carrot', 'potato', 'bamboo', 'cooked_beef'],
-  'preset-mobs': ['rotten_flesh', 'bone', 'string', 'gunpowder', 'arrow'],
-  'preset-redstone': ['rail'],
-  'preset-nether': ['netherrack', 'end_stone'],
-};
-
-const defaultSurvivalDedicatedGroupByItemId = Object.fromEntries(
-  Object.entries(defaultSurvivalDedicatedGroups).flatMap(([groupId, itemNames]) =>
-    itemNames.map((itemName) => [`minecraft:${itemName}`, groupId])),
-);
 
 const unassignedStorageGroup = { id: 'unassigned', label: 'Unassigned' };
 const TEXTURE_VERSION = DEFAULT_MINECRAFT_VERSION;
@@ -746,16 +658,16 @@ function App() {
 
   const applySurvivalPreset = () => {
     const itemIds = new Set(minecraftItems.map((item) => item.id));
-    const pools = defaultSurvivalPools
+    const pools = defaultSurvivalPreset26_3.pools
       .map((pool) => ({ ...pool, itemIds: pool.itemIds.filter((itemId) => itemIds.has(itemId)) }))
       .filter((pool) => pool.itemIds.length > 0);
     const dedicatedChests = Object.fromEntries(
-      Object.entries(defaultSurvivalDedicatedReservations).filter(([itemId]) => itemIds.has(itemId)),
+      Object.entries(defaultSurvivalPreset26_3.dedicatedChests).filter(([itemId]) => itemIds.has(itemId)),
     );
     const plannedItemIds = new Set([...Object.keys(dedicatedChests), ...pools.flatMap((pool) => pool.itemIds)]);
     const itemGroups = Object.fromEntries([
       ...pools.flatMap((pool) => pool.itemIds.map((itemId) => [itemId, pool.groupId])),
-      ...Object.keys(dedicatedChests).map((itemId) => [itemId, defaultSurvivalDedicatedGroupByItemId[itemId]]),
+      ...Object.keys(dedicatedChests).map((itemId) => [itemId, defaultSurvivalPreset26_3.dedicatedGroupIds[itemId]]),
     ]);
     const poolByItemId = Object.fromEntries(pools.flatMap((pool) => pool.itemIds.map((itemId) => [itemId, pool.id])));
 
@@ -764,14 +676,14 @@ function App() {
     setChestType('double');
     setItemScope('survival');
     setIncludedItems(makeIncludedItemMap(minecraftItems, [...plannedItemIds]));
-    setCustomStorageGroups(survivalPresetGroups.map(({ id, label }) => ({ id, label })));
+    setCustomStorageGroups(defaultSurvivalPreset26_3.groups);
     setCustomStoragePools(pools.map(({ itemIds, ...pool }) => pool));
     setItemGroupOverrides(itemGroups);
     setItemPoolOverrides(poolByItemId);
     setItemDedicatedChestOverrides(dedicatedChests);
     setStorageGroupChestOverrides(Object.fromEntries(pools.map((pool) => [pool.id, 1])));
     setReservationSectionOverrides({});
-    setSelectedCategory(survivalPresetGroups[0].id);
+    setSelectedCategory(defaultSurvivalPreset26_3.groups[0].id);
   };
 
   const confirmGroupRename = (groupId) => {
@@ -970,7 +882,7 @@ function App() {
             >
               Survival base - 600 chests
             </button>
-            <p className="helper-text">A fixed, hand-authored starter layout with named pools and dedicated bulk reservations across 600 double chests.</p>
+            <p className="helper-text">A fixed Minecraft 26.3 survival catalog: every eligible item is assigned once across named pools and dedicated bulk reservations totaling 600 double chests.</p>
           </div>
 
           <div className="field-grid">
