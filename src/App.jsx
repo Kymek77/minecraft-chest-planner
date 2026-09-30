@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { DndContext, PointerSensor, TouchSensor, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
 import {
   inventoryPresets,
 } from './data/minecraftItems';
@@ -99,6 +100,22 @@ function MinecraftItemIcon({ item, assetVersion, className = '' }) {
   );
 }
 
+function DraggableItemCard({ item, children }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: `item:${item.id}` });
+  const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined;
+
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className={isDragging ? 'dragging-item' : ''}>
+      {children}
+    </div>
+  );
+}
+
+function ItemDropTarget({ id, className = '', children }) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return <div ref={setNodeRef} className={`${className}${isOver ? ' drag-over' : ''}`}>{children}</div>;
+}
+
 const makeIncludedItemMap = (items, selectedIds = items.map((item) => item.id)) => {
   const map = {};
   items.forEach((item) => {
@@ -136,6 +153,10 @@ function App() {
   const [draggedItemId, setDraggedItemId] = useState(null);
   const [newStorageGroupName, setNewStorageGroupName] = useState('');
   const [newStoragePoolName, setNewStoragePoolName] = useState('');
+  const dragSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 6 } }),
+  );
 
   useEffect(() => {
     let active = true;
@@ -247,7 +268,7 @@ function App() {
       { id: `${group.id}-shared`, groupId: group.id, label: 'Shared pool', isDefault: true },
       ...customStoragePools.filter((pool) => pool.groupId === group.id),
     ]),
-    [customStorageGroups, storageGroups],
+    [customStoragePools, storageGroups],
   );
 
   const storagePoolById = useMemo(
@@ -711,7 +732,16 @@ function App() {
     event.target.value = '';
   };
 
+  const handleItemDragEnd = ({ active, over }) => {
+    if (!over || !String(active.id).startsWith('item:')) return;
+    const itemId = String(active.id).replace(/^item:/, '');
+    const targetId = String(over.id);
+    if (targetId.startsWith('group:')) setItemStorageGroup(itemId, targetId.replace(/^group:/, ''));
+    if (targetId.startsWith('pool:')) setItemStoragePool(itemId, targetId.replace(/^pool:/, ''));
+  };
+
   return (
+    <DndContext sensors={dragSensors} onDragEnd={handleItemDragEnd}>
     <div className="app-shell">
       <header className="topbar">
         <div>
@@ -848,22 +878,15 @@ function App() {
           <div className="toolbar">
             <div className="category-tabs">
               {storageGroups.map((group) => (
-                <button
-                  key={group.id}
-                  type="button"
-                  className={selectedCategory === group.id ? 'tab active' : 'tab'}
-                  onClick={() => setSelectedCategory(group.id)}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    const itemId = event.dataTransfer.getData('application/x-minecraft-item') || event.dataTransfer.getData('text/plain') || draggedItemIdRef.current;
-                    if (itemId) setItemStorageGroup(itemId, group.id);
-                    draggedItemIdRef.current = null;
-                    setDraggedItemId(null);
-                  }}
-                >
-                  {group.label}
-                </button>
+                <ItemDropTarget key={group.id} id={`group:${group.id}`}>
+                  <button
+                    type="button"
+                    className={selectedCategory === group.id ? 'tab active' : 'tab'}
+                    onClick={() => setSelectedCategory(group.id)}
+                  >
+                    {group.label}
+                  </button>
+                </ItemDropTarget>
               ))}
             </div>
 
@@ -899,18 +922,7 @@ function App() {
             </div>
             <div className="pool-list">
               {storagePlanByGroupId[selectedCategory]?.pools.map((pool) => (
-                <div
-                  key={pool.id}
-                  className="pool-drop-target"
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    const itemId = event.dataTransfer.getData('application/x-minecraft-item') || event.dataTransfer.getData('text/plain') || draggedItemIdRef.current;
-                    if (itemId) setItemStoragePool(itemId, pool.id);
-                    draggedItemIdRef.current = null;
-                    setDraggedItemId(null);
-                  }}
-                >
+                <ItemDropTarget key={pool.id} id={`pool:${pool.id}`} className="pool-drop-target">
                   <div>
                     <strong>{pool.label}</strong>
                     <small>{pool.items.length} item types; minimum {pool.minimumChests} chest{pool.minimumChests === 1 ? '' : 's'}.</small>
@@ -924,7 +936,7 @@ function App() {
                       onChange={(event) => setSharedPoolChests(pool.id, event.target.value)}
                     />
                   </label>
-                </div>
+                </ItemDropTarget>
               ))}
             </div>
           </div>
@@ -939,22 +951,8 @@ function App() {
             {filteredItems.map((item) => {
               const checked = !!includedItems[item.id];
               return (
-                <div
-                  key={item.id}
-                  className={checked ? 'inventory-card selected' : 'inventory-card'}
-                  draggable
-                  onDragStart={(event) => {
-                    event.dataTransfer.setData('application/x-minecraft-item', item.id);
-                    event.dataTransfer.setData('text/plain', item.id);
-                    event.dataTransfer.effectAllowed = 'move';
-                    draggedItemIdRef.current = item.id;
-                    setDraggedItemId(item.id);
-                  }}
-                  onDragEnd={() => {
-                    draggedItemIdRef.current = null;
-                    setDraggedItemId(null);
-                  }}
-                >
+                <DraggableItemCard key={item.id} item={item}>
+                <div className={checked ? 'inventory-card selected' : 'inventory-card'}>
                   <div className="inventory-card-header">
                     <div className="item-title">
                       <MinecraftItemIcon item={item} assetVersion={minecraftVersion || TEXTURE_VERSION} />
@@ -992,6 +990,7 @@ function App() {
                     <small>{itemDedicatedChestOverrides[item.id] ? 'Reserved for this item only' : 'Uses the shared group chests'}</small>
                   </label>
                 </div>
+                </DraggableItemCard>
               );
             })}
           </div>
@@ -1175,6 +1174,7 @@ function App() {
         </div>
       </section>
     </div>
+    </DndContext>
   );
 }
 
