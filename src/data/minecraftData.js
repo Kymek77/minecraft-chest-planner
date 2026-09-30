@@ -1,4 +1,4 @@
-import { minecraftItems as fallbackItems } from './minecraftItems';
+import { minecraftItems as fallbackItems } from './minecraftItems.js';
 
 export const MINECRAFT_DATA_REPO =
   'https://raw.githubusercontent.com/PrismarineJS/minecraft-data/master/data/pc';
@@ -74,7 +74,11 @@ const mobDropPatterns = [
   'string',
 ];
 
-const findPattern = (name, patterns) => patterns.find((pattern) => name.includes(pattern));
+const hasNamePart = (name, part) => new RegExp(`(^|_)${part.split('_').join('_')}($|_)`).test(name);
+
+const hasNamePhrase = (name, phrase) => hasNamePart(name, phrase);
+
+const findPattern = (name, patterns) => patterns.find((pattern) => hasNamePhrase(name, pattern));
 
 const displayNameFromId = (name) =>
   name
@@ -87,7 +91,7 @@ const classifyBaseMinecraftItem = (item) => {
   const displayName = item.displayName || name;
   const id = `minecraft:${item.name}`;
 
-  if (technicalPatterns.some((pattern) => name.includes(pattern))) {
+  if (technicalPatterns.some((pattern) => hasNamePhrase(name, pattern))) {
     nonSurvivalItemIds.add(id);
     return { category: 'Technical', subcategory: 'Command-only' };
   }
@@ -101,23 +105,23 @@ const classifyBaseMinecraftItem = (item) => {
   }
 
   if (item.enchantCategories?.some((category) => ['mining', 'fishing'].includes(category))) {
-    const subcategory = name.includes('pickaxe')
+    const subcategory = hasNamePart(name, 'pickaxe')
       ? 'Pickaxes'
-      : name.includes('axe')
+      : hasNamePart(name, 'axe')
         ? 'Axes'
-        : name.includes('shovel')
+        : hasNamePart(name, 'shovel')
           ? 'Shovels'
-          : name.includes('hoe')
+          : hasNamePart(name, 'hoe')
             ? 'Hoes'
             : 'Tools';
     return { category: 'Tools', subcategory };
   }
 
   const foodPattern = findPattern(name, foodPatterns);
-  if (foodPattern || name.includes('potion')) {
+  if (foodPattern || hasNamePart(name, 'potion')) {
     return {
       category: 'Food',
-      subcategory: name.includes('cooked_') ? 'Cooked food' : 'Consumables',
+      subcategory: name.startsWith('cooked_') ? 'Cooked food' : 'Consumables',
     };
   }
 
@@ -126,44 +130,52 @@ const classifyBaseMinecraftItem = (item) => {
     return { category: 'Mob Drops', subcategory: 'Drops' };
   }
 
-  if (name.includes('redstone') || ['piston', 'observer', 'hopper', 'dispenser', 'dropper', 'crafter', 'tnt'].some((part) => name.includes(part))) {
+  if (hasNamePart(name, 'redstone') || ['piston', 'observer', 'hopper', 'dispenser', 'dropper', 'crafter', 'tnt'].some((part) => hasNamePart(name, part))) {
     return { category: 'Mechanics', subcategory: 'Redstone' };
   }
 
-  if (name.includes('ore') || ['ingot', 'nugget', 'raw_', '_block'].some((part) => name.includes(part)) && ['iron', 'gold', 'copper', 'diamond', 'emerald', 'netherite', 'coal', 'lapis'].some((part) => name.includes(part))) {
-    return { category: 'Resources', subcategory: name.includes('ore') ? 'Ores' : 'Materials' };
+  if (hasNamePart(name, 'ore') || ['ingot', 'nugget'].some((part) => hasNamePart(name, part)) || name.startsWith('raw_')) {
+    return { category: 'Resources', subcategory: hasNamePart(name, 'ore') ? 'Ores' : 'Materials' };
   }
 
-  if (name.includes('seed') || ['wheat', 'beetroot', 'cactus', 'sugar_cane', 'kelp', 'bamboo'].some((part) => name.includes(part))) {
+  if (hasNamePart(name, 'seed') || ['wheat', 'beetroot', 'cactus', 'sugar_cane', 'kelp', 'bamboo'].some((part) => hasNamePhrase(name, part))) {
     return { category: 'Farming', subcategory: 'Crops' };
   }
 
-  if (name.includes('dye') || name.includes('banner') || name.includes('painting') || name.includes('disc')) {
+  if (['dye', 'banner', 'painting'].some((part) => hasNamePart(name, part)) || name.startsWith('music_disc_')) {
     return { category: 'Decor', subcategory: 'Decoration' };
   }
 
-  if (name.includes('log') || name.includes('plank') || name.includes('wood') || name.includes('stem') || name.includes('hyphae')) {
+  if (['log', 'logs', 'plank', 'planks', 'wood', 'woods', 'stem', 'stems', 'hyphae'].some((part) => hasNamePart(name, part))) {
     return { category: 'Wood', subcategory: 'Wood sets' };
   }
 
-  if (name.includes('boat') || name.includes('minecart') || name.includes('rail')) {
+  if (['boat', 'minecart', 'rail'].some((part) => hasNamePart(name, part))) {
     return { category: 'Utility', subcategory: 'Transport' };
   }
 
-  if (name.includes('bucket') || name.includes('torch') || name.includes('lantern') || name.includes('campfire') || name.includes('compass')) {
+  if (['bucket', 'torch', 'lantern', 'campfire', 'compass'].some((part) => hasNamePart(name, part))) {
     return { category: 'Utility', subcategory: 'Utility' };
   }
 
-  if (name.includes('nether') || ['netherrack', 'basalt', 'blackstone', 'soul_sand', 'soul_soil', 'crimson', 'warped'].some((part) => name.includes(part))) {
+  if (['nether', 'netherrack', 'basalt', 'blackstone', 'soul_sand', 'soul_soil', 'crimson', 'warped'].some((part) => hasNamePhrase(name, part))) {
     return { category: 'Nether', subcategory: 'Nether blocks' };
   }
 
-  if (name.includes('diamond') || name.includes('emerald') || name.includes('netherite') || name.includes('echo_shard') || name.includes('dragon_egg')) {
+  if (['diamond', 'emerald', 'netherite', 'echo_shard', 'dragon_egg'].some((part) => hasNamePhrase(name, part))) {
     return { category: 'Rare', subcategory: 'Rare items' };
   }
 
-  if (displayName.includes('Block') || ['stone', 'dirt', 'sand', 'glass', 'brick', 'terracotta', 'slab', 'stairs', 'wall'].some((part) => name.includes(part))) {
+  if (displayName.endsWith(' Block') || name === 'glass' || hasNamePart(name, 'glass_pane') || ['stone', 'dirt', 'sand', 'brick', 'terracotta', 'slab', 'stairs', 'wall'].some((part) => hasNamePart(name, part))) {
     return { category: 'Building', subcategory: 'Building blocks' };
+  }
+
+  if (['sword', 'bow', 'crossbow', 'trident', 'mace', 'spear'].some((part) => hasNamePart(name, part))) {
+    return { category: 'Combat', subcategory: 'Weapons' };
+  }
+
+  if (['pickaxe', 'shovel', 'axe', 'hoe', 'shears', 'fishing_rod'].some((part) => hasNamePart(name, part))) {
+    return { category: 'Tools', subcategory: 'General Tools' };
   }
 
   return { category: 'Utility', subcategory: 'Miscellaneous' };
@@ -173,31 +185,32 @@ const woodMaterials = ['oak', 'spruce', 'birch', 'jungle', 'acacia', 'cherry', '
 const colorMaterials = ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', 'pink', 'gray', 'light_gray', 'cyan', 'purple', 'blue', 'brown', 'green', 'red', 'black'];
 
 const findMaterial = (name, materials) => {
-  const match = materials.find((material) => name === material || name.startsWith(`${material}_`) || name.includes(`_${material}_`));
-  return match ? match.replaceAll('_', ' ') : null;
+  const match = materials.find((material) => hasNamePart(name, material));
+  return match ? match.replaceAll('_', ' ').replace(/(^|\s)\S/g, (letter) => letter.toUpperCase()) : null;
 };
 
 const deriveItemFacets = (item, baseClassification) => {
   const name = item.name.toLowerCase();
-  const material = findMaterial(name, woodMaterials) || findMaterial(name, colorMaterials);
-  const dimension = name.includes('nether') || ['netherrack', 'basalt', 'blackstone', 'soul_sand', 'soul_soil', 'crimson', 'warped', 'blaze', 'ghast', 'magma'].some((part) => name.includes(part))
+  const material = findMaterial(name, woodMaterials);
+  const color = findMaterial(name, colorMaterials);
+  const dimension = hasNamePart(name, 'nether') || ['netherrack', 'basalt', 'blackstone', 'soul_sand', 'soul_soil', 'crimson', 'warped', 'blaze', 'ghast', 'magma'].some((part) => hasNamePhrase(name, part))
     ? 'Nether'
-    : name.includes('end_') || name.includes('ender') || name.includes('chorus') || name.includes('dragon')
+    : name.startsWith('end_') || hasNamePart(name, 'ender') || hasNamePart(name, 'chorus') || hasNamePart(name, 'dragon')
       ? 'End'
-      : name.includes('sculk') || name.includes('echo_shard')
+      : hasNamePart(name, 'sculk') || hasNamePart(name, 'echo_shard')
         ? 'Deep Dark'
-        : name.includes('prismarine') || name.includes('coral') || name.includes('kelp') || name.includes('sea_')
+        : hasNamePart(name, 'prismarine') || hasNamePart(name, 'coral') || hasNamePart(name, 'kelp') || name.startsWith('sea_')
           ? 'Ocean'
           : 'Overworld';
-  const form = name.includes('hanging_sign')
+  const form = hasNamePart(name, 'hanging_sign')
     ? 'Hanging Sign'
-    : name.includes('fence_gate')
+    : hasNamePart(name, 'fence_gate')
       ? 'Fence Gate'
-      : name.includes('trapdoor')
+      : hasNamePart(name, 'trapdoor')
         ? 'Trapdoor'
         : name.endsWith('_door') || name === 'iron_door'
           ? 'Door'
-          : name.includes('pressure_plate')
+          : hasNamePart(name, 'pressure_plate')
             ? 'Pressure Plate'
             : name.endsWith('_button')
               ? 'Button'
@@ -211,35 +224,37 @@ const deriveItemFacets = (item, baseClassification) => {
                       ? 'Fence'
                       : name.endsWith('_sign')
                         ? 'Sign'
-                        : name.includes('log') || name.includes('stem') || name.includes('hyphae')
+                        : ['log', 'logs', 'stem', 'stems', 'hyphae'].some((part) => hasNamePart(name, part))
                           ? 'Log'
-                          : name.includes('plank')
+                          : hasNamePart(name, 'planks') || hasNamePart(name, 'plank')
                             ? 'Planks'
-                            : name.includes('ore')
+                            : hasNamePart(name, 'ore')
                               ? 'Ore'
-                              : name.includes('ingot')
+                              : hasNamePart(name, 'ingot')
                                 ? 'Ingot'
-                                : name.includes('nugget')
+                                : hasNamePart(name, 'nugget')
                                   ? 'Nugget'
-                                  : name.includes('block')
+                                  : hasNamePart(name, 'block')
                                     ? 'Block'
                                     : 'Base';
   const buildingForms = ['Block', 'Planks', 'Log', 'Slab', 'Stairs', 'Wall', 'Fence', 'Fence Gate', 'Door', 'Trapdoor', 'Button', 'Pressure Plate', 'Sign', 'Hanging Sign'];
   const isBuildingMaterial = buildingForms.includes(form) ||
-    name === 'glass' || name.includes('glass_pane') || name.includes('terracotta') ||
-    name.includes('concrete') || name.endsWith('_wool') || name.endsWith('_carpet') ||
+    name === 'glass' || hasNamePart(name, 'glass_pane') || hasNamePart(name, 'terracotta') ||
+    hasNamePart(name, 'concrete') || name.endsWith('_wool') || name.endsWith('_carpet') ||
     name.endsWith('_brick') || name.endsWith('_bricks') || name.endsWith('_coral_block');
   const isTechnical = baseClassification.category === 'Technical';
   const isArmor = item.enchantCategories?.some((category) => category.includes('armor'));
-  const isWeapon = item.enchantCategories?.some((category) => ['weapon', 'sword', 'bow', 'crossbow', 'trident', 'mace'].includes(category));
-  const isTool = item.enchantCategories?.some((category) => ['mining', 'fishing'].includes(category));
+  const isWeapon = item.enchantCategories?.some((category) => ['weapon', 'sword', 'bow', 'crossbow', 'trident', 'mace'].includes(category)) ||
+    ['sword', 'bow', 'crossbow', 'trident', 'mace', 'spear'].some((part) => hasNamePart(name, part));
+  const isTool = item.enchantCategories?.some((category) => ['mining', 'fishing'].includes(category)) ||
+    ['pickaxe', 'shovel', 'axe', 'hoe', 'shears', 'fishing_rod'].some((part) => hasNamePart(name, part));
   const isFood = baseClassification.category === 'Food';
-  const isFarming = baseClassification.category === 'Farming' || ['sapling', 'propagule', 'flower', 'mushroom', 'fungus', 'roots', 'seed'].some((part) => name.includes(part));
+  const isFarming = baseClassification.category === 'Farming' || ['sapling', 'propagule', 'flower', 'mushroom', 'fungus', 'roots', 'seed'].some((part) => hasNamePart(name, part));
   const isRedstone = baseClassification.category === 'Mechanics';
-  const isTransport = name.includes('boat') || name.includes('minecart') || name.includes('rail');
+  const isTransport = ['boat', 'minecart', 'rail'].some((part) => hasNamePart(name, part));
   const isMobDrop = baseClassification.category === 'Mob Drops' || name.endsWith('_spawn_egg') || name.endsWith('_head') || name.endsWith('_scute');
-  const isDecoration = baseClassification.category === 'Decor' || name.includes('banner') || name.includes('dye') || name.includes('painting') || name.includes('music_disc');
-  const isResource = baseClassification.category === 'Resources' || name.includes('ore') || name.includes('ingot') || name.includes('nugget') || name.includes('raw_');
+  const isDecoration = baseClassification.category === 'Decor' || ['banner', 'dye', 'painting'].some((part) => hasNamePart(name, part)) || name.startsWith('music_disc_');
+  const isResource = baseClassification.category === 'Resources' || ['ore', 'ingot', 'nugget'].some((part) => hasNamePart(name, part)) || name.startsWith('raw_');
 
   let category = baseClassification.category;
   let family = baseClassification.subcategory;
@@ -255,31 +270,31 @@ const deriveItemFacets = (item, baseClassification) => {
     family = 'Weapons';
   } else if (isTool) {
     category = 'Tools & Equipment';
-    family = name.includes('pickaxe') ? 'Mining' : name.includes('hoe') ? 'Farming' : name.includes('fishing') ? 'Fishing' : 'General Tools';
+    family = hasNamePart(name, 'pickaxe') ? 'Mining' : hasNamePart(name, 'hoe') ? 'Farming' : hasNamePart(name, 'fishing') ? 'Fishing' : 'General Tools';
   } else if (isFood) {
     category = 'Food & Brewing';
-    family = name.includes('potion') || name.includes('bottle') ? 'Brewing' : name.includes('cooked_') ? 'Cooked Food' : name.includes('stew') || name.includes('soup') ? 'Meals' : 'Food';
+    family = hasNamePart(name, 'potion') || hasNamePart(name, 'bottle') ? 'Brewing' : name.startsWith('cooked_') ? 'Cooked Food' : hasNamePart(name, 'stew') || hasNamePart(name, 'soup') ? 'Meals' : 'Food';
   } else if (isFarming) {
     category = 'Farming & Nature';
-    family = name.includes('sapling') || name.includes('propagule') ? 'Tree Growing' : name.includes('flower') || name.includes('mushroom') || name.includes('fungus') ? 'Plants' : 'Crops';
+    family = hasNamePart(name, 'sapling') || hasNamePart(name, 'propagule') ? 'Tree Growing' : hasNamePart(name, 'flower') || hasNamePart(name, 'mushroom') || hasNamePart(name, 'fungus') ? 'Plants' : 'Crops';
   } else if (isRedstone) {
     category = 'Redstone & Automation';
-    family = name.includes('rail') ? 'Rail Systems' : name.includes('piston') || name.includes('observer') || name.includes('hopper') ? 'Automation' : 'Redstone';
+    family = hasNamePart(name, 'rail') ? 'Rail Systems' : ['piston', 'observer', 'hopper'].some((part) => hasNamePart(name, part)) ? 'Automation' : 'Redstone';
   } else if (isTransport) {
     category = 'Transport & Storage';
-    family = name.includes('rail') ? 'Rail Systems' : name.includes('boat') ? 'Boats' : name.includes('minecart') ? 'Minecarts' : 'Storage';
+    family = hasNamePart(name, 'rail') ? 'Rail Systems' : hasNamePart(name, 'boat') ? 'Boats' : hasNamePart(name, 'minecart') ? 'Minecarts' : 'Storage';
   } else if (isMobDrop) {
     category = 'Mob Drops';
-    family = name.endsWith('_spawn_egg') ? 'Spawn Eggs' : name.includes('head') || name.includes('skull') ? 'Mob Trophies' : 'Mob Materials';
+    family = name.endsWith('_spawn_egg') ? 'Spawn Eggs' : hasNamePart(name, 'head') || hasNamePart(name, 'skull') ? 'Mob Trophies' : 'Mob Materials';
   } else if (isDecoration) {
     category = 'Decoration & Collectibles';
-    family = name.includes('dye') || name.includes('banner') ? 'Color and Patterns' : name.includes('disc') || name.includes('painting') ? 'Collectibles' : 'Decor';
+    family = hasNamePart(name, 'dye') || hasNamePart(name, 'banner') ? 'Color and Patterns' : name.startsWith('music_disc_') || hasNamePart(name, 'painting') ? 'Collectibles' : 'Decor';
   } else if (isResource) {
     category = 'Resources';
-    family = name.includes('ore') ? 'Ores' : name.includes('ingot') || name.includes('nugget') ? 'Metals' : name.includes('diamond') || name.includes('emerald') ? 'Gems' : 'Materials';
+    family = hasNamePart(name, 'ore') ? 'Ores' : hasNamePart(name, 'ingot') || hasNamePart(name, 'nugget') ? 'Metals' : hasNamePart(name, 'diamond') || hasNamePart(name, 'emerald') ? 'Gems' : 'Materials';
   } else if (isBuildingMaterial) {
     category = 'Building';
-    family = material || (name.includes('stone') || name.includes('deepslate') ? 'Stone' : name.includes('glass') ? 'Glass' : name.includes('terracotta') || name.includes('concrete') ? 'Colored Blocks' : dimension === 'Nether' ? 'Nether Blocks' : 'General Building');
+    family = material || (hasNamePart(name, 'stone') || hasNamePart(name, 'deepslate') ? 'Stone' : name === 'glass' || hasNamePart(name, 'glass_pane') ? 'Glass' : hasNamePart(name, 'terracotta') ? 'Terracotta' : hasNamePart(name, 'concrete') ? 'Concrete' : dimension === 'Nether' ? 'Nether Blocks' : 'General Building');
   } else if (baseClassification.category === 'Nether') {
     category = 'Resources';
     family = 'Nether Materials';
@@ -296,6 +311,7 @@ const deriveItemFacets = (item, baseClassification) => {
     subcategory: family || baseClassification.subcategory,
     family: family || 'General',
     material,
+    color,
     form,
     dimension,
     rarity: baseClassification.category === 'Technical' ? 'Technical' : baseClassification.category === 'Rare' ? 'Rare' : 'Common',

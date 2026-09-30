@@ -603,7 +603,7 @@ function App() {
 
                   <div className="inventory-card-meta">
                     <small>{item.category} / {item.subcategory}</small>
-                    <small>{[item.material, item.form, item.dimension].filter(Boolean).join(' • ')}</small>
+                    <small>{[item.material, item.color, item.form, item.dimension].filter(Boolean).join(' • ')}</small>
                   </div>
                 </div>
               );
