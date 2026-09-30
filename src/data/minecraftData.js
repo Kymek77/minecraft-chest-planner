@@ -11,6 +11,7 @@ export const nonSurvivalItemIds = new Set([
   'minecraft:bedrock',
   'minecraft:chain_command_block',
   'minecraft:command_block',
+  'minecraft:command_block_minecart',
   'minecraft:debug_stick',
   'minecraft:end_portal_frame',
   'minecraft:jigsaw',

@@ -25,19 +25,53 @@ const defaultStorageConfig = {
 const unassignedStorageGroup = { id: 'unassigned', label: 'Unassigned' };
 const TEXTURE_VERSION = '1.21.4';
 const MCASSET_ASSETS = 'https://assets.mcasset.cloud';
+const modelTexturePromises = new Map();
 
 const reservationColor = (id) => {
   const value = Array.from(id).reduce((total, character) => ((total * 31) + character.charCodeAt(0)) >>> 0, 7);
   return `hsl(${value % 360} 62% 56%)`;
 };
 
+const fetchJsonAsset = (url) => {
+  if (!modelTexturePromises.has(url)) {
+    modelTexturePromises.set(url, fetch(url)
+      .then((response) => (response.ok ? response.json() : null))
+      .catch(() => null));
+  }
+  return modelTexturePromises.get(url);
+};
+
+const resolveModelTexture = async (assetVersion, modelId, seen = new Set()) => {
+  const modelPath = modelId.replace(/^minecraft:/, '');
+  if (seen.has(modelPath)) return null;
+  const model = await fetchJsonAsset(`${MCASSET_ASSETS}/${assetVersion}/assets/minecraft/models/${modelPath}.json`);
+  if (!model) return null;
+
+  const directTexture = Object.values(model.textures || {})
+    .find((texture) => typeof texture === 'string' && !texture.startsWith('#'));
+  if (directTexture) return directTexture.replace(/^minecraft:/, '');
+  if (!model.parent) return null;
+
+  return resolveModelTexture(assetVersion, model.parent, new Set(seen).add(modelPath));
+};
+
+const resolveItemModelTexture = async (assetVersion, itemName) => {
+  const itemDefinition = await fetchJsonAsset(`${MCASSET_ASSETS}/${assetVersion}/assets/minecraft/items/${itemName}.json`);
+  const modelId = itemDefinition?.model?.type === 'minecraft:model'
+    ? itemDefinition.model.model
+    : `minecraft:item/${itemName}`;
+  return resolveModelTexture(assetVersion, modelId);
+};
+
 function MinecraftItemIcon({ item, assetVersion, className = '' }) {
   const [textureFolder, setTextureFolder] = useState('item');
+  const [modelTexture, setModelTexture] = useState(null);
   const [missingTexture, setMissingTexture] = useState(false);
   const textureName = item?.id?.replace(/^minecraft:/, '') || 'barrier';
 
   useEffect(() => {
     setTextureFolder('item');
+    setModelTexture(null);
     setMissingTexture(false);
   }, [assetVersion, item?.id]);
 
@@ -48,12 +82,17 @@ function MinecraftItemIcon({ item, assetVersion, className = '' }) {
   return (
     <span className={`minecraft-item-icon ${className}`}>
       <img
-        src={`${MCASSET_ASSETS}/${assetVersion || TEXTURE_VERSION}/assets/minecraft/textures/${textureFolder}/${textureName}.png`}
+        src={`${MCASSET_ASSETS}/${assetVersion || TEXTURE_VERSION}/assets/minecraft/textures/${modelTexture || `${textureFolder}/${textureName}`}.png`}
         alt=""
         loading="lazy"
-        onError={() => {
-          if (textureFolder === 'item') setTextureFolder('block');
-          else setMissingTexture(true);
+        onError={async () => {
+          if (modelTexture) setMissingTexture(true);
+          else if (textureFolder === 'item') setTextureFolder('block');
+          else if (textureFolder === 'block') {
+            const resolvedTexture = await resolveItemModelTexture(assetVersion || TEXTURE_VERSION, textureName);
+            if (resolvedTexture) setModelTexture(resolvedTexture);
+            else setMissingTexture(true);
+          } else setMissingTexture(true);
         }}
       />
     </span>
@@ -695,8 +734,8 @@ function App() {
 
           <div className="scope-block">
             <div>
-              <h3>Item scope</h3>
-              <p className="helper-text">Hide command and debug-only registry entries.</p>
+              <h3>Survival view</h3>
+              <p className="helper-text">Curated filter for known command and debug-only registry entries.</p>
             </div>
             <label className="switch-row">
               <span>All items</span>
@@ -709,7 +748,7 @@ function App() {
               <span className="switch-track" aria-hidden="true"><span /></span>
             </label>
             <small className="scope-status">
-              {itemScope === 'all' ? 'Includes command and debug-only entries.' : 'Survival-available items only.'}
+              {itemScope === 'all' ? 'Includes all registry entries.' : 'Curated survival view.'}
             </small>
           </div>
 
