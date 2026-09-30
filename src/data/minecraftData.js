@@ -1,6 +1,5 @@
 import { minecraftItems as fallbackItems } from './minecraftItems';
 
-export const DEFAULT_MINECRAFT_VERSION = '1.21.1';
 export const MINECRAFT_DATA_REPO =
   'https://raw.githubusercontent.com/PrismarineJS/minecraft-data/master/data/pc';
 export const MOJANG_VERSION_MANIFEST =

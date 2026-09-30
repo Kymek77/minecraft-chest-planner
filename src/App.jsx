@@ -3,7 +3,6 @@ import {
   inventoryPresets,
 } from './data/minecraftItems';
 import {
-  DEFAULT_MINECRAFT_VERSION,
   fetchMinecraftDataVersions,
   fetchMinecraftItems,
   fetchMojangReleaseVersions,
@@ -36,8 +35,8 @@ function App() {
   const fileInputRef = useRef(null);
 
   const [minecraftItems, setMinecraftItems] = useState(fallbackMinecraftItems);
-  const [minecraftVersion, setMinecraftVersion] = useState(DEFAULT_MINECRAFT_VERSION);
-  const [minecraftVersions, setMinecraftVersions] = useState([DEFAULT_MINECRAFT_VERSION]);
+  const [minecraftVersion, setMinecraftVersion] = useState(null);
+  const [minecraftVersions, setMinecraftVersions] = useState([]);
   const [latestPublicVersion, setLatestPublicVersion] = useState(null);
   const [latestSupportedVersion, setLatestSupportedVersion] = useState(null);
   const [dataStatus, setDataStatus] = useState('Loading version data...');
@@ -55,7 +54,7 @@ function App() {
     let active = true;
 
     const loadMinecraftData = async () => {
-      setDataStatus(`Loading Minecraft ${minecraftVersion} item data...`);
+      setDataStatus('Loading live Minecraft version data...');
 
       try {
         const [versions, publicReleaseInfo, minecraftDataVersions] = await Promise.all([
@@ -66,22 +65,22 @@ function App() {
 
         if (!active) return;
         const supportedVersions = publicReleaseInfo.releases.filter((version) => versions.includes(version));
-        const latestMinecraftDataVersion = publicReleaseInfo.releases.find((version) => minecraftDataVersions.includes(version))
-          || DEFAULT_MINECRAFT_VERSION;
-        const availableVersions = publicReleaseInfo.releases.filter((version) => versions.includes(version));
-        const latestSupported = availableVersions[0] || DEFAULT_MINECRAFT_VERSION;
+        const latestMinecraftDataVersion = publicReleaseInfo.releases.find((version) => minecraftDataVersions.includes(version));
+        const latestSupported = publicReleaseInfo.releases.find((version) => versions.includes(version));
         setMinecraftVersions(supportedVersions);
         setLatestPublicVersion(publicReleaseInfo.latestRelease);
         setLatestSupportedVersion(latestSupported);
 
-        if (minecraftVersions.length === 1 && minecraftVersion !== latestSupported) {
+        if (!minecraftVersion && latestSupported) {
           setMinecraftVersion(latestSupported);
           return;
         }
 
+        const selectedVersion = minecraftVersion || latestSupported;
+        if (!selectedVersion) throw new Error('No supported Minecraft item source was found.');
         const { items, source, unclassifiedCount = 0 } = await fetchMinecraftItems(
-          minecraftVersion,
-          minecraftVersion === latestMinecraftDataVersion ? null : latestMinecraftDataVersion,
+          selectedVersion,
+          selectedVersion === latestMinecraftDataVersion ? null : latestMinecraftDataVersion,
         );
         if (!active) return;
         setMinecraftItems(items);
@@ -398,7 +397,7 @@ function App() {
 
           <label>
             Minecraft version
-            <select value={minecraftVersion} onChange={(event) => setMinecraftVersion(event.target.value)}>
+            <select value={minecraftVersion || ''} onChange={(event) => setMinecraftVersion(event.target.value)}>
               {minecraftVersions.map((version) => (
                 <option
                   key={version}
