@@ -47,6 +47,7 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPreset, setSelectedPreset] = useState('survival');
   const [itemScope, setItemScope] = useState('survival');
+  const [itemOrder, setItemOrder] = useState('class');
   const [includedItems, setIncludedItems] = useState(() => makeIncludedItemMap(fallbackMinecraftItems));
 
   useEffect(() => {
@@ -63,7 +64,9 @@ function App() {
 
         if (!active) return;
         const supportedVersions = publicReleaseInfo.releases.filter((version) => versions.includes(version));
-        const latestSupported = supportedVersions[0] || DEFAULT_MINECRAFT_VERSION;
+        const latestMinecraftDataVersion = supportedVersions[0] || DEFAULT_MINECRAFT_VERSION;
+        const availableVersions = publicReleaseInfo.releases.filter((version) => versions.includes(version));
+        const latestSupported = availableVersions[0] || DEFAULT_MINECRAFT_VERSION;
         setMinecraftVersions(supportedVersions);
         setLatestPublicVersion(publicReleaseInfo.latestRelease);
         setLatestSupportedVersion(latestSupported);
@@ -73,7 +76,10 @@ function App() {
           return;
         }
 
-        const { items, source } = await fetchMinecraftItems(minecraftVersion);
+        const { items, source, unclassifiedCount = 0 } = await fetchMinecraftItems(
+          minecraftVersion,
+          minecraftVersion === latestMinecraftDataVersion ? null : latestMinecraftDataVersion,
+        );
         if (!active) return;
         setMinecraftItems(items);
         setIncludedItems(makeIncludedItemMap(items));
@@ -81,7 +87,10 @@ function App() {
         const sourceLag = publicReleaseInfo.latestRelease !== latestSupported
           ? ` Public latest is ${publicReleaseInfo.latestRelease}; item data currently reaches ${latestSupported}.`
           : '';
-        setDataStatus(`${items.length.toLocaleString()} items loaded from ${source}.${sourceLag}`);
+        const unclassifiedStatus = unclassifiedCount > 0
+          ? ` ${unclassifiedCount} item${unclassifiedCount === 1 ? '' : 's'} need class review for this version.`
+          : '';
+        setDataStatus(`${items.length.toLocaleString()} items loaded from ${source}.${sourceLag}${unclassifiedStatus}`);
       } catch (error) {
         if (!active) return;
         setDataStatus('Using the built-in catalog. Unable to reach minecraft-data.');
@@ -133,9 +142,24 @@ function App() {
     [itemScope, minecraftItems],
   );
 
+  const orderedAvailableItems = useMemo(() => {
+    const sorted = availableItems.slice();
+    if (itemOrder === 'alphabetical') {
+      return sorted.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+    }
+
+    return sorted.sort((a, b) =>
+      (itemCategories.indexOf(a.category) - itemCategories.indexOf(b.category)) ||
+      a.category.localeCompare(b.category) ||
+      a.subcategory.localeCompare(b.subcategory) ||
+      a.name.localeCompare(b.name) ||
+      a.id.localeCompare(b.id),
+    );
+  }, [availableItems, itemOrder]);
+
   const selectedItems = useMemo(
-    () => availableItems.filter((item) => includedItems[item.id]),
-    [availableItems, includedItems],
+    () => orderedAvailableItems.filter((item) => includedItems[item.id]),
+    [orderedAvailableItems, includedItems],
   );
 
   const categoryGroups = useMemo(() => {
@@ -246,7 +270,7 @@ function App() {
 
   const filteredItems = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
-    return availableItems.filter((item) => {
+    return orderedAvailableItems.filter((item) => {
       const categoryMatch = item.category === selectedCategory;
       const subcategoryMatch = selectedSubcategory === 'All' || item.subcategory === selectedSubcategory;
       const queryMatch =
@@ -258,7 +282,7 @@ function App() {
 
       return categoryMatch && subcategoryMatch && queryMatch;
     });
-  }, [availableItems, searchQuery, selectedCategory, selectedSubcategory]);
+  }, [orderedAvailableItems, searchQuery, selectedCategory, selectedSubcategory]);
 
   const categorySummary = useMemo(
     () =>
@@ -381,6 +405,13 @@ function App() {
                   {version}{version === latestPublicVersion && version !== latestSupportedVersion ? ' (data pending)' : ''}
                 </option>
               ))}
+            </select>
+          </label>
+          <label>
+            Item ordering
+            <select value={itemOrder} onChange={(event) => setItemOrder(event.target.value)}>
+              <option value="class">Class, subclass, then name</option>
+              <option value="alphabetical">Alphabetical only</option>
             </select>
           </label>
           <p className="data-status" role="status">{dataStatus}</p>

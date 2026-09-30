@@ -194,6 +194,7 @@ export const itemCategories = [
   'Farming',
   'Nether',
   'Technical',
+  'Unclassified',
 ];
 
 export const fetchMinecraftVersions = async () => {
@@ -232,7 +233,7 @@ export const fetchMojangReleaseVersions = async () => {
   };
 };
 
-export const fetchMinecraftItems = async (version) => {
+export const fetchMinecraftItems = async (version, metadataFallbackVersion) => {
   try {
     const response = await fetch(`${MINECRAFT_DATA_REPO}/${encodeURIComponent(version)}/items.json`);
     if (response.ok) {
@@ -246,15 +247,38 @@ export const fetchMinecraftItems = async (version) => {
     // Try mcmeta when minecraft-data is unavailable for this version.
   }
 
-  const response = await fetch(`${MCMETA_REPO}/${encodeURIComponent(version)}-registries/item/data.json`);
+  const [mcmetaResponse, metadataResponse] = await Promise.all([
+    fetch(`${MCMETA_REPO}/${encodeURIComponent(version)}-registries/item/data.json`),
+    metadataFallbackVersion
+      ? fetch(`${MINECRAFT_DATA_REPO}/${encodeURIComponent(metadataFallbackVersion)}/items.json`)
+      : Promise.resolve(null),
+  ]);
+
+  const response = mcmetaResponse;
   if (!response.ok) throw new Error(`Unable to load Minecraft ${version} item data from either source.`);
 
   const itemNames = await response.json();
+  const metadataItems = metadataResponse?.ok ? await metadataResponse.json() : [];
+  const metadataByName = Object.fromEntries(metadataItems.map((item) => [item.name, item]));
+  const unclassifiedNames = itemNames.filter((name) => name !== 'air' && !metadataByName[name]);
+
   return {
     items: itemNames
       .filter((name) => name !== 'air')
-      .map((name) => normalizeItem({ name, displayName: displayNameFromId(name), stackSize: 64 })),
-    source: 'mcmeta',
+      .map((name) => metadataByName[name]
+        ? normalizeItem(metadataByName[name])
+        : {
+            id: `minecraft:${name}`,
+            name: displayNameFromId(name),
+            category: 'Unclassified',
+            subcategory: 'Needs review',
+            stack: 64,
+            maxDurability: null,
+          }),
+    source: metadataFallbackVersion
+      ? `mcmeta (metadata cross-checked with minecraft-data ${metadataFallbackVersion})`
+      : 'mcmeta',
+    unclassifiedCount: unclassifiedNames.length,
   };
 };
 
