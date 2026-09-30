@@ -12,7 +12,7 @@ const displayNameFromId = (name) =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
 
-const normalizeItem = (item, tags = [], source = 'minecraft-data') => {
+const normalizeItem = (item, source = 'minecraft-data') => {
   const id = typeof item.id === 'string' && item.id.includes(':') ? item.id : `minecraft:${item.name}`;
   const itemName = id.replace(/^minecraft:/, '');
   return {
@@ -21,47 +21,8 @@ const normalizeItem = (item, tags = [], source = 'minecraft-data') => {
     stack: item.stackSize || item.stack || 64,
     maxDurability: item.maxDurability || null,
     enchantCategories: Array.isArray(item.enchantCategories) ? item.enchantCategories : [],
-    tags: Array.isArray(tags) ? tags : [],
     source,
   };
-};
-
-const getTagValue = (value) => typeof value === 'string' ? value : value?.id || null;
-
-const fetchMinecraftItemTags = async (version) => {
-  const tagListResponse = await fetch(`${MCMETA_REPO}/${encodeURIComponent(version)}-registries/tag/item/data.json`);
-  if (!tagListResponse.ok) throw new Error(`Unable to load Minecraft ${version} item tag registry.`);
-
-  const tagNames = await tagListResponse.json();
-  const tagEntries = await Promise.all(
-    tagNames.map(async (tag) => {
-      const response = await fetch(`${MCMETA_REPO}/${encodeURIComponent(version)}-data/data/minecraft/tags/item/${tag}.json`);
-      if (!response.ok) return [tag, []];
-      const data = await response.json();
-      return [tag, data.values || []];
-    }),
-  );
-  const valuesByTag = Object.fromEntries(tagEntries);
-  const resolveTag = (tag, seen = new Set()) => {
-    if (seen.has(tag)) return [];
-    const nextSeen = new Set(seen).add(tag);
-    return (valuesByTag[tag] || []).flatMap((value) => {
-      const rawValue = getTagValue(value);
-      const normalizedValue = rawValue?.replace(/^#?minecraft:/, '');
-      if (!normalizedValue) return [];
-      return rawValue.startsWith('#')
-        ? resolveTag(normalizedValue, nextSeen)
-        : [normalizedValue];
-    });
-  };
-  const tagsByItem = {};
-  tagNames.forEach((tag) => {
-    resolveTag(tag).forEach((itemName) => {
-      if (!tagsByItem[itemName]) tagsByItem[itemName] = [];
-      tagsByItem[itemName].push(tag);
-    });
-  });
-  return tagsByItem;
 };
 
 export const fetchMinecraftVersions = async () => {
@@ -99,13 +60,12 @@ export const fetchMojangReleaseVersions = async () => {
 };
 
 export const fetchMinecraftItems = async (version, metadataFallbackVersion) => {
-  const tagsByItem = await fetchMinecraftItemTags(version).catch(() => ({}));
   try {
     const response = await fetch(`${MINECRAFT_DATA_REPO}/${encodeURIComponent(version)}/items.json`);
     if (response.ok) {
       const items = await response.json();
       return {
-        items: items.filter((item) => item.name !== 'air').map((item) => normalizeItem(item, tagsByItem[item.name] || [])),
+        items: items.filter((item) => item.name !== 'air').map((item) => normalizeItem(item)),
         source: 'minecraft-data',
       };
     }
@@ -132,8 +92,8 @@ export const fetchMinecraftItems = async (version, metadataFallbackVersion) => {
     items: itemNames
       .filter((name) => name !== 'air')
       .map((name) => metadataByName[name]
-        ? normalizeItem(metadataByName[name], tagsByItem[name] || [])
-        : normalizeItem({ name, displayName: displayNameFromId(name) }, tagsByItem[name] || [], 'mcmeta')),
+        ? normalizeItem(metadataByName[name])
+        : normalizeItem({ name, displayName: displayNameFromId(name) }, 'mcmeta')),
     source: metadataFallbackVersion
       ? `mcmeta (metadata cross-checked with minecraft-data ${metadataFallbackVersion})`
       : 'mcmeta',

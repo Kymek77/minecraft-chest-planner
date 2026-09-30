@@ -43,7 +43,6 @@ function App() {
   const [storageConfig, setStorageConfig] = useState(defaultStorageConfig);
   const [chestType, setChestType] = useState('double');
   const [selectedCategory, setSelectedCategory] = useState(unassignedStorageGroup.id);
-  const [selectedTag, setSelectedTag] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPreset, setSelectedPreset] = useState('survival');
   const [itemOrder, setItemOrder] = useState('class');
@@ -273,23 +272,15 @@ function App() {
     const normalizedQuery = searchQuery.trim().toLowerCase();
     return orderedAvailableItems.filter((item) => {
       const groupMatch = itemStorageGroups[item.id] === selectedCategory;
-      const tagMatch = selectedTag === 'All' || item.tags?.includes(selectedTag);
       const queryMatch =
         normalizedQuery.length === 0 ||
         item.name.toLowerCase().includes(normalizedQuery) ||
         item.id.toLowerCase().includes(normalizedQuery) ||
-        item.tags.some((tag) => tag.includes(normalizedQuery)) ||
         item.enchantCategories.some((category) => category.includes(normalizedQuery));
 
-      return groupMatch && tagMatch && queryMatch;
+      return groupMatch && queryMatch;
     });
-  }, [itemStorageGroups, orderedAvailableItems, searchQuery, selectedCategory, selectedTag]);
-
-  const tagOptions = useMemo(() => {
-    const tags = new Set();
-    orderedAvailableItems.forEach((item) => item.tags?.forEach((tag) => tags.add(tag)));
-    return ['All', ...Array.from(tags).sort()];
-  }, [orderedAvailableItems]);
+  }, [itemStorageGroups, orderedAvailableItems, searchQuery, selectedCategory]);
 
   const categorySummary = useMemo(
     () =>
@@ -539,10 +530,7 @@ function App() {
                   key={group.id}
                   type="button"
                   className={selectedCategory === group.id ? 'tab active' : 'tab'}
-                  onClick={() => {
-                    setSelectedCategory(group.id);
-                    setSelectedTag('All');
-                  }}
+                  onClick={() => setSelectedCategory(group.id)}
                 >
                   {group.label}
                 </button>
@@ -554,7 +542,7 @@ function App() {
                 type="text"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search items, category, or ID"
+                placeholder="Search items or ID"
               />
             </div>
           </div>
@@ -565,15 +553,6 @@ function App() {
               <input value={newStorageGroupName} onChange={(event) => setNewStorageGroupName(event.target.value)} placeholder="e.g. Mob drops" />
             </label>
             <button type="button" className="secondary-button" onClick={addStorageGroup}>Add group</button>
-          </div>
-
-          <div className="advanced-filter">
-            <label>
-              Official game tag
-              <select value={selectedTag} onChange={(event) => setSelectedTag(event.target.value)}>
-                {tagOptions.map((tag) => <option key={tag} value={tag}>{tag === 'All' ? 'All official tags' : tag}</option>)}
-              </select>
-            </label>
           </div>
 
           <div className="inventory-grid">
@@ -596,7 +575,6 @@ function App() {
                   <div className="inventory-card-meta">
                     <small>Store in: {storageGroupById[itemStorageGroups[item.id]].label}</small>
                     <small>Source: {item.source}</small>
-                    <small>Official tags: {item.tags.length ? item.tags.join(', ') : 'none'}</small>
                     {item.enchantCategories.length > 0 && <small>Enchantment categories: {item.enchantCategories.join(', ')}</small>}
                   </div>
                   <label className="item-group-control">
