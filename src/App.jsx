@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { DndContext, PointerSensor, TouchSensor, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
+import { Trash2 } from 'lucide-react';
 import {
   inventoryPresets,
 } from './data/minecraftItems';
@@ -933,9 +934,10 @@ function App() {
                       type="button"
                       className="delete-control"
                       aria-label={`Delete ${group.label} group`}
+                      title={`Delete ${group.label} group`}
                       onClick={() => deleteStorageGroup(group.id)}
                     >
-                      Delete
+                      <Trash2 size={15} strokeWidth={2} aria-hidden="true" />
                     </button>
                   )}
                 </ItemDropTarget>
@@ -993,9 +995,10 @@ function App() {
                       type="button"
                       className="delete-control"
                       aria-label={`Delete ${pool.label} pool`}
+                      title={`Delete ${pool.label} pool`}
                       onClick={() => deleteStoragePool(pool.id)}
                     >
-                      Delete
+                      <Trash2 size={15} strokeWidth={2} aria-hidden="true" />
                     </button>
                   )}
                 </ItemDropTarget>
