@@ -8,6 +8,7 @@ import {
   fetchMojangReleaseVersions,
   fetchMinecraftVersions,
   fallbackMinecraftItems,
+  nonSurvivalItemIds,
 } from './data/minecraftData';
 
 const CHEST_CAPACITY = {
@@ -31,13 +32,14 @@ const reservationColor = (id) => {
 };
 
 function MinecraftItemIcon({ item, assetVersion, className = '' }) {
+  const [textureFolder, setTextureFolder] = useState('item');
   const [missingTexture, setMissingTexture] = useState(false);
   const textureName = item?.id?.replace(/^minecraft:/, '') || 'barrier';
-  const textureFolder = item?.isBlock ? 'block' : 'item';
 
   useEffect(() => {
+    setTextureFolder('item');
     setMissingTexture(false);
-  }, [assetVersion, item?.id, item?.isBlock]);
+  }, [assetVersion, item?.id]);
 
   if (missingTexture) {
     return <span className={`minecraft-item-icon missing ${className}`} aria-hidden="true" />;
@@ -50,7 +52,8 @@ function MinecraftItemIcon({ item, assetVersion, className = '' }) {
         alt=""
         loading="lazy"
         onError={() => {
-          setMissingTexture(true);
+          if (textureFolder === 'item') setTextureFolder('block');
+          else setMissingTexture(true);
         }}
       />
     </span>
@@ -79,6 +82,7 @@ function App() {
   const [selectedCategory, setSelectedCategory] = useState(unassignedStorageGroup.id);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPreset, setSelectedPreset] = useState('survival');
+  const [itemScope, setItemScope] = useState('survival');
   const [itemOrder, setItemOrder] = useState('class');
   const [includedItems, setIncludedItems] = useState(() => makeIncludedItemMap(fallbackMinecraftItems));
   const [itemGroupOverrides, setItemGroupOverrides] = useState({});
@@ -179,7 +183,12 @@ function App() {
     [storageGroups],
   );
 
-  const availableItems = minecraftItems;
+  const availableItems = useMemo(
+    () => (itemScope === 'all'
+      ? minecraftItems
+      : minecraftItems.filter((item) => !nonSurvivalItemIds.has(item.id))),
+    [itemScope, minecraftItems],
+  );
 
   const itemStorageGroups = useMemo(
     () => Object.fromEntries(minecraftItems.map((item) => [
@@ -458,6 +467,7 @@ function App() {
 
   const resetToDefault = () => {
     setSelectedPreset('survival');
+    setItemScope('survival');
     setIncludedItems(makeIncludedItemMap(minecraftItems));
     setItemGroupOverrides({});
     setItemDedicatedChestOverrides({});
@@ -473,6 +483,7 @@ function App() {
       chestsPerSection: storageConfig.chestsPerSection,
       totalSections: storageConfig.totalSections,
       chestType,
+      itemScope,
       includedItems: Object.entries(includedItems)
         .filter(([, selected]) => selected)
         .map(([itemId]) => itemId),
@@ -564,6 +575,10 @@ function App() {
 
         if (parsed.chestType) {
           setChestType(parsed.chestType === 'single' ? 'single' : 'double');
+        }
+
+        if (parsed.itemScope) {
+          setItemScope(parsed.itemScope === 'all' ? 'all' : 'survival');
         }
       } catch (error) {
         window.alert('Unable to import the selected file. Please choose a valid JSON export.');
@@ -676,6 +691,26 @@ function App() {
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="scope-block">
+            <div>
+              <h3>Item scope</h3>
+              <p className="helper-text">Hide command and debug-only registry entries.</p>
+            </div>
+            <label className="switch-row">
+              <span>All items</span>
+              <input
+                type="checkbox"
+                role="switch"
+                checked={itemScope === 'all'}
+                onChange={(event) => setItemScope(event.target.checked ? 'all' : 'survival')}
+              />
+              <span className="switch-track" aria-hidden="true"><span /></span>
+            </label>
+            <small className="scope-status">
+              {itemScope === 'all' ? 'Includes command and debug-only entries.' : 'Survival-available items only.'}
+            </small>
           </div>
 
           <div className="import-export">

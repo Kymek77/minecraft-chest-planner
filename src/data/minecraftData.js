@@ -6,6 +6,21 @@ export const MOJANG_VERSION_MANIFEST =
   'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json';
 export const MCMETA_REPO = 'https://raw.githubusercontent.com/misode/mcmeta';
 
+export const nonSurvivalItemIds = new Set([
+  'minecraft:barrier',
+  'minecraft:bedrock',
+  'minecraft:chain_command_block',
+  'minecraft:command_block',
+  'minecraft:debug_stick',
+  'minecraft:end_portal_frame',
+  'minecraft:jigsaw',
+  'minecraft:knowledge_book',
+  'minecraft:light',
+  'minecraft:repeating_command_block',
+  'minecraft:structure_block',
+  'minecraft:structure_void',
+]);
+
 const displayNameFromId = (name) =>
   name
     .split('_')
