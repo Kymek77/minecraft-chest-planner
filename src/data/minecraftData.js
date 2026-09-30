@@ -26,7 +26,7 @@ const normalizeItem = (item, tags = [], source = 'minecraft-data') => {
   };
 };
 
-const normalizeTagValue = (value) => (typeof value === 'string' ? value : value?.id || null)?.replace(/^minecraft:/, '');
+const getTagValue = (value) => typeof value === 'string' ? value : value?.id || null;
 
 const fetchMinecraftItemTags = async (version) => {
   const tagListResponse = await fetch(`${MCMETA_REPO}/${encodeURIComponent(version)}-registries/tag/item/data.json`);
@@ -46,10 +46,11 @@ const fetchMinecraftItemTags = async (version) => {
     if (seen.has(tag)) return [];
     const nextSeen = new Set(seen).add(tag);
     return (valuesByTag[tag] || []).flatMap((value) => {
-      const normalizedValue = normalizeTagValue(value);
+      const rawValue = getTagValue(value);
+      const normalizedValue = rawValue?.replace(/^#?minecraft:/, '');
       if (!normalizedValue) return [];
-      return normalizedValue.startsWith('#')
-        ? resolveTag(normalizedValue.slice(1), nextSeen)
+      return rawValue.startsWith('#')
+        ? resolveTag(normalizedValue, nextSeen)
         : [normalizedValue];
     });
   };
