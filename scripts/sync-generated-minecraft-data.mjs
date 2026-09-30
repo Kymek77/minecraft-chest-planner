@@ -100,9 +100,15 @@ patchKnownGeneratorCompatibility(generatorVersionDirectory);
 
 const gradleCommand = process.platform === 'win32' ? 'gradlew.bat' : './gradlew';
 if (process.platform !== 'win32') chmodSync(join(generatorDirectory, 'gradlew'), 0o755);
-run(gradleCommand, [`:mc:${latestRelease}:runServer`], generatorDirectory);
-
 const generatedItems = join(generatorVersionDirectory, 'run', 'minecraft-data', 'items.json');
+
+try {
+  run(gradleCommand, [`:mc:${latestRelease}:runServer`], generatorDirectory);
+} catch (error) {
+  if (!existsSync(generatedItems)) throw error;
+  console.warn(`The generator reported a partial failure, but items.json was generated for ${latestRelease}; continuing with item data.`);
+}
+
 if (!existsSync(generatedItems)) {
   throw new Error(`The generator completed without producing items.json for ${latestRelease}.`);
 }
