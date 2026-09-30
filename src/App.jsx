@@ -62,12 +62,9 @@ function App() {
         ]);
 
         if (!active) return;
-        const supportedVersions = versions.filter((version) => publicReleaseInfo.releases.includes(version));
-        const latestSupported = supportedVersions.at(-1) || DEFAULT_MINECRAFT_VERSION;
-        const versionOptions = publicReleaseInfo.releases.includes(publicReleaseInfo.latestRelease)
-          ? [...supportedVersions, ...(supportedVersions.includes(publicReleaseInfo.latestRelease) ? [] : [publicReleaseInfo.latestRelease])]
-          : supportedVersions;
-        setMinecraftVersions(versionOptions);
+        const supportedVersions = publicReleaseInfo.releases.filter((version) => versions.includes(version));
+        const latestSupported = supportedVersions[0] || DEFAULT_MINECRAFT_VERSION;
+        setMinecraftVersions(supportedVersions);
         setLatestPublicVersion(publicReleaseInfo.latestRelease);
         setLatestSupportedVersion(latestSupported);
 

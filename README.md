@@ -31,6 +31,6 @@ The Vite configuration detects the repository name automatically in Actions, so 
 
 ## Data coverage
 
-The scheduled **Check Minecraft data coverage** workflow compares Mojang's latest public release with the latest release present in `minecraft-data`. This keeps the source gap visible in the Actions summary while the upstream generator and data repository catch up.
+The scheduled **Check Minecraft data coverage** workflow compares Mojang's latest public release with the latest releases available from `minecraft-data` and `mcmeta`. This keeps source coverage visible in the Actions summary.
 
 The app uses the public `minecraft-data` repository directly and falls back to `mcmeta` item registries for stable releases that `minecraft-data` has not published yet. The coverage workflow reports both sources and the latest release with available item data.
