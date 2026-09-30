@@ -76,7 +76,7 @@ function App() {
           return;
         }
 
-        const items = await fetchMinecraftItems(minecraftVersion);
+        const { items, source } = await fetchMinecraftItems(minecraftVersion);
         if (!active) return;
         setMinecraftItems(items);
         setIncludedItems(makeIncludedItemMap(items));
@@ -84,7 +84,7 @@ function App() {
         const sourceLag = publicReleaseInfo.latestRelease !== latestSupported
           ? ` Public latest is ${publicReleaseInfo.latestRelease}; item data currently reaches ${latestSupported}.`
           : '';
-        setDataStatus(`${items.length.toLocaleString()} items loaded from minecraft-data.${sourceLag}`);
+        setDataStatus(`${items.length.toLocaleString()} items loaded from ${source}.${sourceLag}`);
       } catch (error) {
         if (!active) return;
         setDataStatus('Using the built-in catalog. Unable to reach minecraft-data.');

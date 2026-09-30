@@ -5,6 +5,7 @@ export const MINECRAFT_DATA_REPO =
   'https://raw.githubusercontent.com/PrismarineJS/minecraft-data/master/data/pc';
 export const MOJANG_VERSION_MANIFEST =
   'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json';
+export const MCMETA_REPO = 'https://raw.githubusercontent.com/misode/mcmeta';
 
 export const nonSurvivalItemIds = new Set([
   'minecraft:barrier',
@@ -75,6 +76,12 @@ const mobDropPatterns = [
 ];
 
 const findPattern = (name, patterns) => patterns.find((pattern) => name.includes(pattern));
+
+const displayNameFromId = (name) =>
+  name
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 
 export const classifyMinecraftItem = (item) => {
   const name = item.name.toLowerCase();
@@ -190,9 +197,26 @@ export const itemCategories = [
 ];
 
 export const fetchMinecraftVersions = async () => {
-  const response = await fetch(`${MINECRAFT_DATA_REPO}/common/versions.json`);
-  if (!response.ok) throw new Error(`Unable to load Minecraft versions (${response.status})`);
-  return response.json();
+  const [minecraftDataResult, mcmetaResult] = await Promise.allSettled([
+    fetch(`${MINECRAFT_DATA_REPO}/common/versions.json`).then((response) => {
+      if (!response.ok) throw new Error(`minecraft-data versions (${response.status})`);
+      return response.json();
+    }),
+    fetch(`${MCMETA_REPO}/summary/versions/data.json`).then((response) => {
+      if (!response.ok) throw new Error(`mcmeta versions (${response.status})`);
+      return response.json();
+    }),
+  ]);
+
+  if (minecraftDataResult.status === 'rejected') {
+    throw new Error(minecraftDataResult.reason?.message || 'Unable to load Minecraft versions.');
+  }
+
+  const mcmetaVersions = mcmetaResult.status === 'fulfilled'
+    ? mcmetaResult.value.filter((version) => version.stable).map((version) => version.id)
+    : [];
+
+  return [...new Set([...minecraftDataResult.value, ...mcmetaVersions])];
 };
 
 export const fetchMojangReleaseVersions = async () => {
@@ -209,11 +233,29 @@ export const fetchMojangReleaseVersions = async () => {
 };
 
 export const fetchMinecraftItems = async (version) => {
-  const response = await fetch(`${MINECRAFT_DATA_REPO}/${encodeURIComponent(version)}/items.json`);
-  if (!response.ok) throw new Error(`Unable to load Minecraft ${version} items (${response.status})`);
+  try {
+    const response = await fetch(`${MINECRAFT_DATA_REPO}/${encodeURIComponent(version)}/items.json`);
+    if (response.ok) {
+      const items = await response.json();
+      return {
+        items: items.filter((item) => item.name !== 'air').map(normalizeItem),
+        source: 'minecraft-data',
+      };
+    }
+  } catch (error) {
+    // Try mcmeta when minecraft-data is unavailable for this version.
+  }
 
-  const items = await response.json();
-  return items.filter((item) => item.name !== 'air').map(normalizeItem);
+  const response = await fetch(`${MCMETA_REPO}/${encodeURIComponent(version)}-registries/item/data.json`);
+  if (!response.ok) throw new Error(`Unable to load Minecraft ${version} item data from either source.`);
+
+  const itemNames = await response.json();
+  return {
+    items: itemNames
+      .filter((name) => name !== 'air')
+      .map((name) => normalizeItem({ name, displayName: displayNameFromId(name), stackSize: 64 })),
+    source: 'mcmeta',
+  };
 };
 
 export const fallbackMinecraftItems = fallbackItems;
