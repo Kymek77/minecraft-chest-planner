@@ -349,6 +349,10 @@ input:focus, select:focus {
   gap: 8px;
 }
 
+.advanced-filter {
+  max-width: 320px;
+}
+
 .inventory-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -390,8 +394,21 @@ input:focus, select:focus {
 
 .inventory-card-meta {
   display: flex;
+  flex-direction: column;
+  gap: 4px;
   justify-content: space-between;
   font-size: 0.74rem;
+}
+
+.item-group-control {
+  margin-top: auto;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.item-group-control select {
+  padding: 7px 9px;
+  font-size: 0.8rem;
 }
 
 .footer-actions {

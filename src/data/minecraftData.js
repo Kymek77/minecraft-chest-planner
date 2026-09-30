@@ -6,20 +6,6 @@ export const MOJANG_VERSION_MANIFEST =
   'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json';
 export const MCMETA_REPO = 'https://raw.githubusercontent.com/misode/mcmeta';
 
-const mcmetaItemTags = [
-  'axes', 'pickaxes', 'shovels', 'hoes', 'swords', 'spears', 'bows', 'crossbows',
-  'head_armor', 'chest_armor', 'leg_armor', 'foot_armor', 'trimmable_armor',
-  'planks', 'logs', 'buttons', 'wooden_buttons', 'pressure_plates', 'wooden_pressure_plates',
-  'stairs', 'wooden_stairs', 'slabs', 'wooden_slabs', 'walls', 'fences', 'wooden_fences',
-  'fence_gates', 'wooden_doors', 'doors', 'wooden_trapdoors', 'trapdoors', 'signs',
-  'hanging_signs', 'rails', 'boats', 'chest_boats', 'shulker_boxes',
-  'ores', 'coal_ores', 'iron_ores', 'gold_ores', 'copper_ores', 'diamond_ores', 'emerald_ores', 'lapis_ores', 'redstone_ores',
-  'redstone_ores', 'dyes', 'flowers', 'small_flowers', 'saplings', 'crops', 'meat', 'fishes',
-  'arrows', 'banners', 'candles', 'lanterns', 'wool', 'wool_carpets', 'concrete', 'concrete_powders',
-  'concrete_slabs', 'concrete_stairs', 'terracotta', 'glazed_terracotta', 'swords', 'pickaxes',
-  'enchantable/armor', 'enchantable/melee_weapon', 'enchantable/mining', 'enchantable/equippable',
-];
-
 export const nonSurvivalItemIds = new Set([
   'minecraft:barrier',
   'minecraft:bedrock',
@@ -312,18 +298,36 @@ const normalizeItem = (item, tags = []) => {
   };
 };
 
+const normalizeTagValue = (value) => (typeof value === 'string' ? value : value?.id || null)?.replace(/^minecraft:/, '');
+
 const fetchMinecraftItemTags = async (version) => {
+  const tagListResponse = await fetch(`${MCMETA_REPO}/${encodeURIComponent(version)}-registries/tag/item/data.json`);
+  if (!tagListResponse.ok) throw new Error(`Unable to load Minecraft ${version} item tag registry.`);
+
+  const tagNames = await tagListResponse.json();
   const tagEntries = await Promise.all(
-    mcmetaItemTags.map(async (tag) => {
+    tagNames.map(async (tag) => {
       const response = await fetch(`${MCMETA_REPO}/${encodeURIComponent(version)}-data/data/minecraft/tags/item/${tag}.json`);
       if (!response.ok) return [tag, []];
       const data = await response.json();
-      return [tag, (data.values || []).map((value) => value.replace(/^minecraft:/, ''))];
+      return [tag, data.values || []];
     }),
   );
+  const valuesByTag = Object.fromEntries(tagEntries);
+  const resolveTag = (tag, seen = new Set()) => {
+    if (seen.has(tag)) return [];
+    const nextSeen = new Set(seen).add(tag);
+    return (valuesByTag[tag] || []).flatMap((value) => {
+      const normalizedValue = normalizeTagValue(value);
+      if (!normalizedValue) return [];
+      return normalizedValue.startsWith('#')
+        ? resolveTag(normalizedValue.slice(1), nextSeen)
+        : [normalizedValue];
+    });
+  };
   const tagsByItem = {};
-  tagEntries.forEach(([tag, itemNames]) => {
-    itemNames.forEach((itemName) => {
+  tagNames.forEach((tag) => {
+    resolveTag(tag).forEach((itemName) => {
       if (!tagsByItem[itemName]) tagsByItem[itemName] = [];
       tagsByItem[itemName].push(tag);
     });

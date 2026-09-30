@@ -8,7 +8,6 @@ import {
   fetchMojangReleaseVersions,
   fetchMinecraftVersions,
   fallbackMinecraftItems,
-  itemCategories,
   nonSurvivalItemIds,
 } from './data/minecraftData';
 
@@ -21,6 +20,43 @@ const defaultStorageConfig = {
   totalChests: 600,
   chestsPerSection: 75,
   totalSections: 8,
+};
+
+const storageGroups = [
+  { id: 'building', label: 'Building blocks', tags: ['stairs', 'slabs', 'walls', 'fences', 'doors', 'trapdoors', 'buttons', 'pressure_plates', 'terracotta', 'concrete', 'wool'] },
+  { id: 'wood', label: 'Wood and plants', tags: ['logs', 'planks', 'saplings', 'leaves'] },
+  { id: 'resources', label: 'Resources and ores', tags: ['ores', 'coal_ores', 'iron_ores', 'gold_ores', 'copper_ores', 'diamond_ores', 'emerald_ores', 'lapis_ores', 'redstone_ores'] },
+  { id: 'redstone', label: 'Redstone and automation', tags: ['rails'] },
+  { id: 'tools', label: 'Tools and combat', tags: ['axes', 'pickaxes', 'shovels', 'hoes', 'swords', 'spears', 'bows', 'crossbows', 'head_armor', 'chest_armor', 'leg_armor', 'foot_armor'] },
+  { id: 'food', label: 'Food and farming', tags: ['meat', 'fishes', 'flowers', 'small_flowers', 'crops', 'villager_plantable_seeds'] },
+  { id: 'transport', label: 'Transport and storage', tags: ['boats', 'chest_boats', 'shulker_boxes'] },
+  { id: 'decor', label: 'Decor and collectibles', tags: ['dyes', 'banners', 'candles', 'lanterns', 'skulls'] },
+  { id: 'mob', label: 'Mob drops', tags: [] },
+  { id: 'utility', label: 'Utility and brewing', tags: [] },
+  { id: 'misc', label: 'Miscellaneous', tags: [] },
+];
+
+const storageGroupById = Object.fromEntries(storageGroups.map((group) => [group.id, group]));
+
+const getDefaultStorageGroup = (item) => {
+  const tags = new Set(item.tags || []);
+  const matchingGroup = storageGroups.find((group) => group.tags.some((tag) => tags.has(tag)));
+  if (matchingGroup) return matchingGroup.id;
+
+  const categoryMap = {
+    Building: 'building',
+    Resources: 'resources',
+    'Redstone & Automation': 'redstone',
+    Combat: 'tools',
+    'Tools & Equipment': 'tools',
+    'Food & Brewing': 'food',
+    'Farming & Nature': 'food',
+    'Transport & Storage': 'transport',
+    'Decoration & Collectibles': 'decor',
+    'Mob Drops': 'mob',
+    Technical: 'misc',
+  };
+  return categoryMap[item.category] || 'utility';
 };
 
 const makeIncludedItemMap = (items, selectedIds = items.map((item) => item.id)) => {
@@ -42,7 +78,7 @@ function App() {
   const [dataStatus, setDataStatus] = useState('Loading version data...');
   const [storageConfig, setStorageConfig] = useState(defaultStorageConfig);
   const [chestType, setChestType] = useState('double');
-  const [selectedCategory, setSelectedCategory] = useState('Building');
+  const [selectedCategory, setSelectedCategory] = useState('building');
   const [selectedSubcategory, setSelectedSubcategory] = useState('All');
   const [selectedForm, setSelectedForm] = useState('All');
   const [selectedTag, setSelectedTag] = useState('All');
@@ -51,6 +87,7 @@ function App() {
   const [itemScope, setItemScope] = useState('survival');
   const [itemOrder, setItemOrder] = useState('class');
   const [includedItems, setIncludedItems] = useState(() => makeIncludedItemMap(fallbackMinecraftItems));
+  const [itemGroupOverrides, setItemGroupOverrides] = useState({});
 
   useEffect(() => {
     let active = true;
@@ -146,6 +183,14 @@ function App() {
     [itemScope, minecraftItems],
   );
 
+  const itemStorageGroups = useMemo(
+    () => Object.fromEntries(minecraftItems.map((item) => [
+      item.id,
+      itemGroupOverrides[item.id] || getDefaultStorageGroup(item),
+    ])),
+    [itemGroupOverrides, minecraftItems],
+  );
+
   const orderedAvailableItems = useMemo(() => {
     const sorted = availableItems.slice();
     if (itemOrder === 'alphabetical') {
@@ -153,13 +198,12 @@ function App() {
     }
 
     return sorted.sort((a, b) =>
-      (itemCategories.indexOf(a.category) - itemCategories.indexOf(b.category)) ||
-      a.category.localeCompare(b.category) ||
+      (storageGroups.findIndex((group) => group.id === itemStorageGroups[a.id]) - storageGroups.findIndex((group) => group.id === itemStorageGroups[b.id])) ||
       a.subcategory.localeCompare(b.subcategory) ||
       a.name.localeCompare(b.name) ||
       a.id.localeCompare(b.id),
     );
-  }, [availableItems, itemOrder]);
+  }, [availableItems, itemOrder, itemStorageGroups]);
 
   const selectedItems = useMemo(
     () => orderedAvailableItems.filter((item) => includedItems[item.id]),
@@ -170,22 +214,24 @@ function App() {
     const groups = {};
 
     selectedItems.forEach((item) => {
-      if (!groups[item.category]) {
-        groups[item.category] = {
-          category: item.category,
+      const groupId = itemStorageGroups[item.id];
+      if (!groups[groupId]) {
+        groups[groupId] = {
+          category: storageGroupById[groupId].label,
+          groupId,
           itemCount: 0,
           items: [],
         };
       }
 
-      groups[item.category].itemCount += 1;
-      groups[item.category].items.push(item);
+      groups[groupId].itemCount += 1;
+      groups[groupId].items.push(item);
     });
 
     return Object.fromEntries(
       Object.entries(groups).sort(([, a], [, b]) => b.itemCount - a.itemCount),
     );
-  }, [selectedItems]);
+  }, [itemStorageGroups, selectedItems]);
 
   const sections = useMemo(() => {
     const generated = [];
@@ -265,27 +311,27 @@ function App() {
   const subcategoryOptions = useMemo(() => {
     const unique = new Set();
     minecraftItems.forEach((item) => {
-      if (item.category === selectedCategory) {
+      if (itemStorageGroups[item.id] === selectedCategory) {
         unique.add(item.subcategory);
       }
     });
     return ['All', ...Array.from(unique).sort()];
-  }, [minecraftItems, selectedCategory]);
+  }, [itemStorageGroups, minecraftItems, selectedCategory]);
 
   const formOptions = useMemo(() => {
     const unique = new Set();
     orderedAvailableItems.forEach((item) => {
-      if (item.category === selectedCategory && (selectedSubcategory === 'All' || item.subcategory === selectedSubcategory)) {
+      if (itemStorageGroups[item.id] === selectedCategory && (selectedSubcategory === 'All' || item.subcategory === selectedSubcategory)) {
         unique.add(item.form);
       }
     });
     return ['All', ...Array.from(unique).sort()];
-  }, [orderedAvailableItems, selectedCategory, selectedSubcategory]);
+  }, [itemStorageGroups, orderedAvailableItems, selectedCategory, selectedSubcategory]);
 
   const filteredItems = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
     return orderedAvailableItems.filter((item) => {
-      const categoryMatch = item.category === selectedCategory;
+      const categoryMatch = itemStorageGroups[item.id] === selectedCategory;
       const subcategoryMatch = selectedSubcategory === 'All' || item.subcategory === selectedSubcategory;
       const formMatch = selectedForm === 'All' || item.form === selectedForm;
       const tagMatch = selectedTag === 'All' || item.tags?.includes(selectedTag);
@@ -298,7 +344,7 @@ function App() {
 
       return categoryMatch && subcategoryMatch && formMatch && tagMatch && queryMatch;
     });
-  }, [orderedAvailableItems, searchQuery, selectedCategory, selectedForm, selectedSubcategory, selectedTag]);
+  }, [itemStorageGroups, orderedAvailableItems, searchQuery, selectedCategory, selectedForm, selectedSubcategory, selectedTag]);
 
   const tagOptions = useMemo(() => {
     const tags = new Set();
@@ -331,6 +377,10 @@ function App() {
     }));
   };
 
+  const setItemStorageGroup = (itemId, groupId) => {
+    setItemGroupOverrides((current) => ({ ...current, [itemId]: groupId }));
+  };
+
   const applyPreset = (presetKey) => {
     const preset = inventoryPresets[presetKey];
     if (!preset) return;
@@ -342,6 +392,7 @@ function App() {
   const resetToDefault = () => {
     setSelectedPreset('survival');
     setIncludedItems(makeIncludedItemMap(minecraftItems));
+    setItemGroupOverrides({});
   };
 
   const exportPlan = () => {
@@ -353,6 +404,7 @@ function App() {
       includedItems: Object.entries(includedItems)
         .filter(([, selected]) => selected)
         .map(([itemId]) => itemId),
+      itemGroupOverrides,
       generatedAt: new Date().toISOString(),
       sections: sectionPlans,
     };
@@ -377,6 +429,14 @@ function App() {
 
         if (Array.isArray(parsed.includedItems)) {
           setIncludedItems(makeIncludedItemMap(minecraftItems, parsed.includedItems));
+        }
+
+        if (parsed.itemGroupOverrides && typeof parsed.itemGroupOverrides === 'object') {
+          setItemGroupOverrides(
+            Object.fromEntries(
+              Object.entries(parsed.itemGroupOverrides).filter(([, groupId]) => storageGroupById[groupId]),
+            ),
+          );
         }
 
         if (parsed.totalChests || parsed.chestsPerSection || parsed.totalSections) {
@@ -537,19 +597,19 @@ function App() {
         <section className="panel main-panel">
           <div className="toolbar">
             <div className="category-tabs">
-              {itemCategories.map((category) => (
+              {storageGroups.map((group) => (
                 <button
-                  key={category}
+                  key={group.id}
                   type="button"
-                  className={selectedCategory === category ? 'tab active' : 'tab'}
+                  className={selectedCategory === group.id ? 'tab active' : 'tab'}
                   onClick={() => {
-                    setSelectedCategory(category);
+                    setSelectedCategory(group.id);
                     setSelectedSubcategory('All');
                     setSelectedForm('All');
                     setSelectedTag('All');
                   }}
                 >
-                  {category}
+                  {group.label}
                 </button>
               ))}
             </div>
@@ -594,17 +654,13 @@ function App() {
             ))}
           </div>
 
-          <div className="subcategory-row">
-            {tagOptions.map((tag) => (
-              <button
-                key={tag}
-                type="button"
-                className={selectedTag === tag ? 'chip active' : 'chip'}
-                onClick={() => setSelectedTag(tag)}
-              >
-                {tag}
-              </button>
-            ))}
+          <div className="advanced-filter">
+            <label>
+              Official game tag
+              <select value={selectedTag} onChange={(event) => setSelectedTag(event.target.value)}>
+                {tagOptions.map((tag) => <option key={tag} value={tag}>{tag === 'All' ? 'All official tags' : tag}</option>)}
+              </select>
+            </label>
           </div>
 
           <div className="inventory-grid">
@@ -625,10 +681,16 @@ function App() {
                   </div>
 
                   <div className="inventory-card-meta">
-                    <small>{item.category} / {item.subcategory}</small>
+                    <small>Store in: {storageGroupById[itemStorageGroups[item.id]].label}</small>
                     <small>{[item.material, item.color, item.form, item.dimension].filter(Boolean).join(' • ')}</small>
-                    {item.tags?.length > 0 && <small>Tags: {item.tags.slice(0, 4).join(', ')}{item.tags.length > 4 ? ' ...' : ''}</small>}
+                    <small>{item.tags?.length || 0} official tags • class: {item.category} / {item.subcategory}</small>
                   </div>
+                  <label className="item-group-control">
+                    Store in
+                    <select value={itemStorageGroups[item.id]} onChange={(event) => setItemStorageGroup(item.id, event.target.value)}>
+                      {storageGroups.map((group) => <option key={group.id} value={group.id}>{group.label}</option>)}
+                    </select>
+                  </label>
                 </div>
               );
             })}
@@ -648,7 +710,7 @@ function App() {
               <strong>{overallStats.itemTypeCount.toLocaleString()}</strong>
             </div>
             <div className="stat-card">
-              <span>Categories</span>
+              <span>Storage groups</span>
               <strong>{overallStats.categoryCount.toLocaleString()}</strong>
             </div>
             <div className="stat-card">
@@ -662,7 +724,7 @@ function App() {
           </div>
 
           <div className="summary-block">
-            <h3>By category</h3>
+            <h3>Storage groups</h3>
             <div className="category-summary-list">
               {categorySummary.map(({ category, items }) => (
                 <div key={category} className="summary-row">
@@ -680,7 +742,7 @@ function App() {
                 <div key={item.id} className="priority-row">
                   <div>
                     <strong>{item.name}</strong>
-                    <small>{item.category} • {item.subcategory}</small>
+                    <small>{storageGroupById[itemStorageGroups[item.id]].label} • {item.subcategory}</small>
                   </div>
                 </div>
               ))}
