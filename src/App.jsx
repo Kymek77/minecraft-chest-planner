@@ -265,11 +265,8 @@ function App() {
   );
 
   const storagePools = useMemo(
-    () => storageGroups.flatMap((group) => [
-      { id: `${group.id}-shared`, groupId: group.id, label: 'Shared pool', isDefault: true },
-      ...customStoragePools.filter((pool) => pool.groupId === group.id),
-    ]),
-    [customStoragePools, storageGroups],
+    () => customStoragePools,
+    [customStoragePools],
   );
 
   const storagePoolById = useMemo(
@@ -280,9 +277,8 @@ function App() {
   const itemStoragePools = useMemo(
     () => Object.fromEntries(minecraftItems.map((item) => {
       const groupId = itemStorageGroups[item.id];
-      const fallbackPoolId = `${groupId}-shared`;
       const overriddenPool = storagePoolById[itemPoolOverrides[item.id]];
-      return [item.id, overriddenPool?.groupId === groupId ? overriddenPool.id : fallbackPoolId];
+      return [item.id, overriddenPool?.groupId === groupId ? overriddenPool.id : null];
     })),
     [itemGroupOverrides, itemPoolOverrides, minecraftItems, storagePoolById, itemStorageGroups],
   );
@@ -311,10 +307,14 @@ function App() {
       const dedicatedItems = items
         .map((item) => ({
           item,
-          chestCount: Math.max(0, Number(itemDedicatedChestOverrides[item.id]) || 0),
+          chestCount: itemStoragePools[item.id]
+            ? 0
+            : itemDedicatedChestOverrides[item.id] === undefined
+              ? 1
+              : Math.max(0, Number(itemDedicatedChestOverrides[item.id]) || 0),
         }))
         .filter(({ chestCount }) => chestCount > 0);
-      const sharedItems = items.filter((item) => !itemDedicatedChestOverrides[item.id]);
+      const sharedItems = items.filter((item) => itemStoragePools[item.id]);
       const pools = storagePools
         .filter((pool) => pool.groupId === group.id)
         .map((pool) => {
@@ -529,6 +529,7 @@ function App() {
   const setItemStorageGroup = (itemId, groupId) => {
     setItemGroupOverrides((current) => ({ ...current, [itemId]: groupId }));
     setItemPoolOverrides((current) => ({ ...current, [itemId]: undefined }));
+    setItemDedicatedChestOverrides((current) => ({ ...current, [itemId]: undefined }));
   };
 
   const setItemStoragePool = (itemId, poolId) => {
@@ -536,6 +537,7 @@ function App() {
     if (!pool) return;
     setItemGroupOverrides((current) => ({ ...current, [itemId]: pool.groupId }));
     setItemPoolOverrides((current) => ({ ...current, [itemId]: poolId }));
+    setItemDedicatedChestOverrides((current) => ({ ...current, [itemId]: 0 }));
   };
 
   const setItemDedicatedChests = (itemId, rawValue) => {
@@ -580,6 +582,13 @@ function App() {
     setItemPoolOverrides((current) => {
       const next = { ...current };
       Object.entries(next).forEach(([itemId, assignedPoolId]) => {
+        if (assignedPoolId === poolId) delete next[itemId];
+      });
+      return next;
+    });
+    setItemDedicatedChestOverrides((current) => {
+      const next = { ...current };
+      Object.entries(itemPoolOverrides).forEach(([itemId, assignedPoolId]) => {
         if (assignedPoolId === poolId) delete next[itemId];
       });
       return next;
@@ -990,17 +999,15 @@ function App() {
                       onChange={(event) => setSharedPoolChests(pool.id, event.target.value)}
                     />
                   </label>
-                  {!pool.isDefault && (
-                    <button
-                      type="button"
-                      className="delete-control"
-                      aria-label={`Delete ${pool.label} pool`}
-                      title={`Delete ${pool.label} pool`}
-                      onClick={() => deleteStoragePool(pool.id)}
-                    >
-                      <Trash2 size={15} strokeWidth={2} aria-hidden="true" />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className="delete-control"
+                    aria-label={`Delete ${pool.label} pool`}
+                    title={`Delete ${pool.label} pool`}
+                    onClick={() => deleteStoragePool(pool.id)}
+                  >
+                    <Trash2 size={15} strokeWidth={2} aria-hidden="true" />
+                  </button>
                 </ItemDropTarget>
               ))}
             </div>
@@ -1049,10 +1056,10 @@ function App() {
                     <input
                       type="number"
                       min="0"
-                      value={itemDedicatedChestOverrides[item.id] || 0}
+                      value={itemStoragePools[item.id] ? 0 : itemDedicatedChestOverrides[item.id] ?? 1}
                       onChange={(event) => setItemDedicatedChests(item.id, event.target.value)}
                     />
-                    <small>{itemDedicatedChestOverrides[item.id] ? 'Reserved for this item only' : 'Uses the shared group chests'}</small>
+                    <small>{itemStoragePools[item.id] ? 'Uses a custom chest pool' : 'Reserved for this item only'}</small>
                   </label>
                 </div>
                 </DraggableItemCard>

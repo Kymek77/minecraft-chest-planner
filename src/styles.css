@@ -341,7 +341,8 @@ input:focus, select:focus {
 
 .group-tab-target {
   display: inline-flex;
-  gap: 4px;
+  align-items: center;
+  gap: 0;
 }
 
 .delete-control {
@@ -351,11 +352,22 @@ input:focus, select:focus {
   align-items: center;
   justify-content: center;
   padding: 0;
-  border: 1px solid rgba(248, 113, 113, 0.38);
-  border-radius: 5px;
-  background: rgba(248, 113, 113, 0.08);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: #fecaca;
   font-size: 0.7rem;
+}
+
+.group-tab-target .delete-control {
+  width: 25px;
+  height: 25px;
+  margin-left: -29px;
+  z-index: 1;
+}
+
+.group-tab-target .tab {
+  padding-right: 34px;
 }
 
 .search-box input {
@@ -419,6 +431,7 @@ input:focus, select:focus {
 }
 
 .pool-drop-target {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -430,7 +443,9 @@ input:focus, select:focus {
 }
 
 .pool-drop-target .delete-control {
-  align-self: flex-end;
+  position: absolute;
+  top: 4px;
+  right: 4px;
 }
 
 .pool-drop-target.drag-over,
