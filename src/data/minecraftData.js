@@ -6,6 +6,20 @@ export const MOJANG_VERSION_MANIFEST =
   'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json';
 export const MCMETA_REPO = 'https://raw.githubusercontent.com/misode/mcmeta';
 
+const mcmetaItemTags = [
+  'axes', 'pickaxes', 'shovels', 'hoes', 'swords', 'spears', 'bows', 'crossbows',
+  'head_armor', 'chest_armor', 'leg_armor', 'foot_armor', 'trimmable_armor',
+  'planks', 'logs', 'buttons', 'wooden_buttons', 'pressure_plates', 'wooden_pressure_plates',
+  'stairs', 'wooden_stairs', 'slabs', 'wooden_slabs', 'walls', 'fences', 'wooden_fences',
+  'fence_gates', 'wooden_doors', 'doors', 'wooden_trapdoors', 'trapdoors', 'signs',
+  'hanging_signs', 'rails', 'boats', 'chest_boats', 'shulker_boxes',
+  'ores', 'coal_ores', 'iron_ores', 'gold_ores', 'copper_ores', 'diamond_ores', 'emerald_ores', 'lapis_ores', 'redstone_ores',
+  'redstone_ores', 'dyes', 'flowers', 'small_flowers', 'saplings', 'crops', 'meat', 'fishes',
+  'arrows', 'banners', 'candles', 'lanterns', 'wool', 'wool_carpets', 'concrete', 'concrete_powders',
+  'concrete_slabs', 'concrete_stairs', 'terracotta', 'glazed_terracotta', 'swords', 'pickaxes',
+  'enchantable/armor', 'enchantable/melee_weapon', 'enchantable/mining', 'enchantable/equippable',
+];
+
 export const nonSurvivalItemIds = new Set([
   'minecraft:barrier',
   'minecraft:bedrock',
@@ -90,10 +104,39 @@ const classifyBaseMinecraftItem = (item) => {
   const name = item.name.toLowerCase();
   const displayName = item.displayName || name;
   const id = `minecraft:${item.name}`;
+  const tags = new Set(item.tags || []);
 
   if (technicalPatterns.some((pattern) => hasNamePhrase(name, pattern))) {
     nonSurvivalItemIds.add(id);
     return { category: 'Technical', subcategory: 'Command-only' };
+  }
+
+  if (['head_armor', 'chest_armor', 'leg_armor', 'foot_armor', 'trimmable_armor'].some((tag) => tags.has(tag))) {
+    return { category: 'Combat', subcategory: 'Armor' };
+  }
+
+  if (['swords', 'spears', 'bows', 'crossbows', 'enchantable/melee_weapon', 'enchantable/weapon'].some((tag) => tags.has(tag))) {
+    return { category: 'Combat', subcategory: 'Weapons' };
+  }
+
+  if (['axes', 'pickaxes', 'shovels', 'hoes', 'enchantable/mining'].some((tag) => tags.has(tag))) {
+    return { category: 'Tools', subcategory: tags.has('pickaxes') ? 'Pickaxes' : tags.has('hoes') ? 'Hoes' : tags.has('axes') ? 'Axes' : 'Tools' };
+  }
+
+  if (['planks', 'logs', 'stairs', 'slabs', 'walls', 'fences', 'fence_gates', 'doors', 'trapdoors', 'buttons', 'pressure_plates', 'signs', 'hanging_signs', 'concrete', 'terracotta', 'glazed_terracotta', 'wool', 'wool_carpets'].some((tag) => tags.has(tag))) {
+    return { category: 'Building', subcategory: tags.has('planks') || tags.has('logs') ? 'Wood' : tags.has('terracotta') || tags.has('concrete') ? 'Colored Blocks' : 'Building Forms' };
+  }
+
+  if (['ores', 'coal_ores', 'iron_ores', 'gold_ores', 'copper_ores', 'diamond_ores', 'emerald_ores', 'lapis_ores', 'redstone_ores'].some((tag) => tags.has(tag))) {
+    return { category: 'Resources', subcategory: 'Ores' };
+  }
+
+  if (['flowers', 'small_flowers', 'saplings', 'crops'].some((tag) => tags.has(tag))) {
+    return { category: 'Farming', subcategory: 'Plants and Crops' };
+  }
+
+  if (['dyes', 'banners'].some((tag) => tags.has(tag))) {
+    return { category: 'Decor', subcategory: 'Color and Patterns' };
   }
 
   if (item.enchantCategories?.some((category) => category.includes('armor'))) {
@@ -320,15 +363,35 @@ const deriveItemFacets = (item, baseClassification) => {
 
 export const classifyMinecraftItem = (item) => deriveItemFacets(item, classifyBaseMinecraftItem(item));
 
-const normalizeItem = (item) => {
-  const classification = classifyMinecraftItem(item);
+const normalizeItem = (item, tags = []) => {
+  const classification = classifyMinecraftItem({ ...item, tags });
   return {
     id: `minecraft:${item.name}`,
     name: item.displayName || item.name,
     ...classification,
     stack: item.stackSize || item.stack || 64,
     maxDurability: item.maxDurability || null,
+    tags,
   };
+};
+
+const fetchMinecraftItemTags = async (version) => {
+  const tagEntries = await Promise.all(
+    mcmetaItemTags.map(async (tag) => {
+      const response = await fetch(`${MCMETA_REPO}/${encodeURIComponent(version)}-data/data/minecraft/tags/item/${tag}.json`);
+      if (!response.ok) return [tag, []];
+      const data = await response.json();
+      return [tag, (data.values || []).map((value) => value.replace(/^minecraft:/, ''))];
+    }),
+  );
+  const tagsByItem = {};
+  tagEntries.forEach(([tag, itemNames]) => {
+    itemNames.forEach((itemName) => {
+      if (!tagsByItem[itemName]) tagsByItem[itemName] = [];
+      tagsByItem[itemName].push(tag);
+    });
+  });
+  return tagsByItem;
 };
 
 export const itemCategories = [
@@ -381,12 +444,13 @@ export const fetchMojangReleaseVersions = async () => {
 };
 
 export const fetchMinecraftItems = async (version, metadataFallbackVersion) => {
+  const tagsByItem = await fetchMinecraftItemTags(version).catch(() => ({}));
   try {
     const response = await fetch(`${MINECRAFT_DATA_REPO}/${encodeURIComponent(version)}/items.json`);
     if (response.ok) {
       const items = await response.json();
       return {
-        items: items.filter((item) => item.name !== 'air').map(normalizeItem),
+        items: items.filter((item) => item.name !== 'air').map((item) => normalizeItem(item, tagsByItem[item.name] || [])),
         source: 'minecraft-data',
       };
     }
@@ -413,7 +477,7 @@ export const fetchMinecraftItems = async (version, metadataFallbackVersion) => {
     items: itemNames
       .filter((name) => name !== 'air')
       .map((name) => metadataByName[name]
-        ? normalizeItem(metadataByName[name])
+        ? normalizeItem(metadataByName[name], tagsByItem[name] || [])
         : {
             id: `minecraft:${name}`,
             name: displayNameFromId(name),
@@ -421,6 +485,7 @@ export const fetchMinecraftItems = async (version, metadataFallbackVersion) => {
             subcategory: 'Needs review',
             stack: 64,
             maxDurability: null,
+            tags: tagsByItem[name] || [],
           }),
     source: metadataFallbackVersion
       ? `mcmeta (metadata cross-checked with minecraft-data ${metadataFallbackVersion})`

@@ -45,6 +45,7 @@ function App() {
   const [selectedCategory, setSelectedCategory] = useState('Building');
   const [selectedSubcategory, setSelectedSubcategory] = useState('All');
   const [selectedForm, setSelectedForm] = useState('All');
+  const [selectedTag, setSelectedTag] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPreset, setSelectedPreset] = useState('survival');
   const [itemScope, setItemScope] = useState('survival');
@@ -287,6 +288,7 @@ function App() {
       const categoryMatch = item.category === selectedCategory;
       const subcategoryMatch = selectedSubcategory === 'All' || item.subcategory === selectedSubcategory;
       const formMatch = selectedForm === 'All' || item.form === selectedForm;
+      const tagMatch = selectedTag === 'All' || item.tags?.includes(selectedTag);
       const queryMatch =
         normalizedQuery.length === 0 ||
         item.name.toLowerCase().includes(normalizedQuery) ||
@@ -294,9 +296,15 @@ function App() {
         item.category.toLowerCase().includes(normalizedQuery) ||
         item.subcategory.toLowerCase().includes(normalizedQuery);
 
-      return categoryMatch && subcategoryMatch && formMatch && queryMatch;
+      return categoryMatch && subcategoryMatch && formMatch && tagMatch && queryMatch;
     });
-  }, [orderedAvailableItems, searchQuery, selectedCategory, selectedForm, selectedSubcategory]);
+  }, [orderedAvailableItems, searchQuery, selectedCategory, selectedForm, selectedSubcategory, selectedTag]);
+
+  const tagOptions = useMemo(() => {
+    const tags = new Set();
+    orderedAvailableItems.forEach((item) => item.tags?.forEach((tag) => tags.add(tag)));
+    return ['All', ...Array.from(tags).sort()];
+  }, [orderedAvailableItems]);
 
   const categorySummary = useMemo(
     () =>
@@ -538,6 +546,7 @@ function App() {
                     setSelectedCategory(category);
                     setSelectedSubcategory('All');
                     setSelectedForm('All');
+                    setSelectedTag('All');
                   }}
                 >
                   {category}
@@ -564,6 +573,7 @@ function App() {
                 onClick={() => {
                   setSelectedSubcategory(subcategory);
                   setSelectedForm('All');
+                  setSelectedTag('All');
                 }}
               >
                 {subcategory}
@@ -580,6 +590,19 @@ function App() {
                 onClick={() => setSelectedForm(form)}
               >
                 {form}
+              </button>
+            ))}
+          </div>
+
+          <div className="subcategory-row">
+            {tagOptions.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                className={selectedTag === tag ? 'chip active' : 'chip'}
+                onClick={() => setSelectedTag(tag)}
+              >
+                {tag}
               </button>
             ))}
           </div>
@@ -604,6 +627,7 @@ function App() {
                   <div className="inventory-card-meta">
                     <small>{item.category} / {item.subcategory}</small>
                     <small>{[item.material, item.color, item.form, item.dimension].filter(Boolean).join(' • ')}</small>
+                    {item.tags?.length > 0 && <small>Tags: {item.tags.slice(0, 4).join(', ')}{item.tags.length > 4 ? ' ...' : ''}</small>}
                   </div>
                 </div>
               );
