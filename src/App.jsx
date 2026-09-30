@@ -23,6 +23,11 @@ const defaultStorageConfig = {
 
 const unassignedStorageGroup = { id: 'unassigned', label: 'Unassigned' };
 
+const reservationColor = (id) => {
+  const value = Array.from(id).reduce((total, character) => ((total * 31) + character.charCodeAt(0)) >>> 0, 7);
+  return `hsl(${value % 360} 62% 56%)`;
+};
+
 const makeIncludedItemMap = (items, selectedIds = items.map((item) => item.id)) => {
   const map = {};
   items.forEach((item) => {
@@ -51,6 +56,8 @@ function App() {
   const [itemDedicatedChestOverrides, setItemDedicatedChestOverrides] = useState({});
   const [customStorageGroups, setCustomStorageGroups] = useState([]);
   const [storageGroupChestOverrides, setStorageGroupChestOverrides] = useState({});
+  const [reservationSectionOverrides, setReservationSectionOverrides] = useState({});
+  const [draggedReservationId, setDraggedReservationId] = useState(null);
   const [newStorageGroupName, setNewStorageGroupName] = useState('');
 
   useEffect(() => {
@@ -279,32 +286,50 @@ function App() {
       remainingChests: section.chestCount,
     }));
 
-    for (let sectionIndex = 0; sectionIndex < allocations.length; sectionIndex += 1) {
-      const section = allocations[sectionIndex];
-      let remainingCapacity = section.remainingChests;
+    const placeReservation = (entry, startIndex) => {
+      for (let sectionIndex = startIndex; sectionIndex < allocations.length; sectionIndex += 1) {
+        const section = allocations[sectionIndex];
+        if (section.remainingChests <= 0 || (remainingByReservation[entry.id] ?? 0) <= 0) continue;
 
-      for (const entry of storagePlanEntries) {
-        if (remainingCapacity <= 0) break;
-        if ((remainingByReservation[entry.id] ?? 0) <= 0) continue;
-
-        const allocated = Math.min(remainingByReservation[entry.id], remainingCapacity);
-        if (allocated <= 0) continue;
-
+        const allocated = Math.min(remainingByReservation[entry.id], section.remainingChests);
         section.categories.push({
+          reservationId: entry.id,
           category: entry.label,
           usedChests: allocated,
           itemPreview: entry.itemPreview,
+          color: reservationColor(entry.id),
         });
-
         remainingByReservation[entry.id] -= allocated;
-        remainingCapacity -= allocated;
+        section.remainingChests -= allocated;
       }
+    };
 
-      section.remainingChests = remainingCapacity;
-    }
+    const sectionIndexById = Object.fromEntries(sections.map((section, index) => [section.id, index]));
+    const pinnedReservations = storagePlanEntries
+      .filter((entry) => sectionIndexById[reservationSectionOverrides[entry.id]] !== undefined)
+      .sort((left, right) =>
+        sectionIndexById[reservationSectionOverrides[left.id]] - sectionIndexById[reservationSectionOverrides[right.id]],
+      );
+    const automaticReservations = storagePlanEntries.filter((entry) => !pinnedReservations.includes(entry));
+
+    pinnedReservations.forEach((entry) => placeReservation(entry, sectionIndexById[reservationSectionOverrides[entry.id]]));
+    automaticReservations.forEach((entry) => placeReservation(entry, 0));
 
     return allocations;
-  }, [sections, storagePlanEntries]);
+  }, [reservationSectionOverrides, sections, storagePlanEntries]);
+
+  const unallocatedReservations = useMemo(() => {
+    const allocatedById = {};
+    sectionPlans.forEach((section) => {
+      section.categories.forEach((category) => {
+        allocatedById[category.reservationId] = (allocatedById[category.reservationId] || 0) + category.usedChests;
+      });
+    });
+
+    return storagePlanEntries
+      .map((entry) => ({ ...entry, chestCount: entry.chestCount - (allocatedById[entry.id] || 0) }))
+      .filter((entry) => entry.chestCount > 0);
+  }, [sectionPlans, storagePlanEntries]);
 
   const overallStats = useMemo(() => {
     const itemTypeCount = selectedItems.length;
@@ -375,6 +400,13 @@ function App() {
     setStorageGroupChestOverrides((current) => ({ ...current, [groupId]: chestCount }));
   };
 
+  const moveReservationToSection = (reservationId, sectionId) => {
+    setReservationSectionOverrides((current) => ({
+      ...current,
+      [reservationId]: sectionId ? Number(sectionId) : undefined,
+    }));
+  };
+
   const addStorageGroup = () => {
     const label = newStorageGroupName.trim();
     if (!label) return;
@@ -399,6 +431,7 @@ function App() {
     setItemDedicatedChestOverrides({});
     setCustomStorageGroups([]);
     setStorageGroupChestOverrides({});
+    setReservationSectionOverrides({});
     setSelectedCategory(unassignedStorageGroup.id);
   };
 
@@ -415,6 +448,7 @@ function App() {
       itemDedicatedChestOverrides,
       customStorageGroups,
       storageGroupChestOverrides,
+      reservationSectionOverrides,
       generatedAt: new Date().toISOString(),
       sections: sectionPlans,
     };
@@ -472,6 +506,16 @@ function App() {
               Object.entries(parsed.storageGroupChestOverrides)
                 .filter(([groupId, chestCount]) => importedGroupIds.has(groupId) && Number(chestCount) >= 0)
                 .map(([groupId, chestCount]) => [groupId, Math.floor(Number(chestCount))]),
+            ),
+          );
+        }
+
+        if (parsed.reservationSectionOverrides && typeof parsed.reservationSectionOverrides === 'object') {
+          setReservationSectionOverrides(
+            Object.fromEntries(
+              Object.entries(parsed.reservationSectionOverrides)
+                .filter(([, sectionId]) => Number.isInteger(Number(sectionId)) && Number(sectionId) > 0)
+                .map(([reservationId, sectionId]) => [reservationId, Number(sectionId)]),
             ),
           );
         }
@@ -769,37 +813,116 @@ function App() {
 
       <section className="panel allocation-panel">
         <div className="allocation-header">
-          <h2>Generated chest allocations</h2>
+          <div>
+            <h2>Chest layout</h2>
+            <p>Drag a reservation onto a section to place it. Each tile represents one chest.</p>
+          </div>
           <p>
             {storageConfig.totalChests} chests • {chestType} chest type • {storageConfig.chestsPerSection} chests/section • {storageConfig.totalSections} sections
           </p>
         </div>
 
-        <div className="allocation-grid">
-          {sectionPlans.map((section) => (
-            <div key={section.id} className="allocation-card">
-              <div className="allocation-card-header">
-                <h3>Section {section.id}</h3>
-                <span>{section.chestCount} chests • {section.slotCapacity} slots</span>
-              </div>
+        <div className="layout-workspace">
+          <aside className="reservation-rail" aria-label="Chest reservations">
+            <div className="reservation-rail-header">
+              <h3>Reservations</h3>
+              <span>{reservedChests} chests</span>
+            </div>
+            <div className="reservation-list">
+              {storagePlanEntries.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="reservation-card"
+                  draggable
+                  onDragStart={(event) => {
+                    event.dataTransfer.setData('text/plain', entry.id);
+                    event.dataTransfer.effectAllowed = 'move';
+                    setDraggedReservationId(entry.id);
+                  }}
+                  onDragEnd={() => setDraggedReservationId(null)}
+                >
+                  <span className="reservation-swatch" style={{ backgroundColor: reservationColor(entry.id) }} />
+                  <div className="reservation-card-copy">
+                    <strong>{entry.label}</strong>
+                    <small>{entry.chestCount} chest{entry.chestCount === 1 ? '' : 's'} • {entry.itemPreview.join(', ')}</small>
+                  </div>
+                  <label>
+                    Section
+                    <select
+                      value={reservationSectionOverrides[entry.id] || ''}
+                      onChange={(event) => moveReservationToSection(entry.id, event.target.value)}
+                    >
+                      <option value="">Auto</option>
+                      {sections.map((section) => <option key={section.id} value={section.id}>Section {section.id}</option>)}
+                    </select>
+                  </label>
+                </div>
+              ))}
+            </div>
 
-              {section.categories.length === 0 ? (
-                <div className="empty-allocation">No item types assigned yet</div>
-              ) : (
-                <div className="allocation-list">
-                  {section.categories.map((category) => (
-                    <div key={`${section.id}-${category.category}`} className="allocation-item">
-                      <div>
-                        <strong>{category.category}</strong>
-                        <small>{category.itemPreview.join(', ') || 'mixed item types'}</small>
-                      </div>
-                      <span>{category.usedChests} chests</span>
-                    </div>
+            {unallocatedReservations.length > 0 && (
+              <div className="unallocated-reservations">
+                <h3>Needs space</h3>
+                {unallocatedReservations.map((entry) => (
+                  <p key={entry.id}>{entry.label}: {entry.chestCount} chest{entry.chestCount === 1 ? '' : 's'}</p>
+                ))}
+              </div>
+            )}
+          </aside>
+
+          <div className="allocation-grid">
+            {sectionPlans.map((section) => (
+              <div
+                key={section.id}
+                className="allocation-card section-drop-zone"
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const reservationId = event.dataTransfer.getData('text/plain') || draggedReservationId;
+                  if (reservationId) moveReservationToSection(reservationId, section.id);
+                  setDraggedReservationId(null);
+                }}
+              >
+                <div className="allocation-card-header">
+                  <h3>Section {section.id}</h3>
+                  <span>{section.chestCount} chests</span>
+                </div>
+
+                <div className="chest-grid" aria-label={`Section ${section.id} chest map`}>
+                  {section.categories.flatMap((category) => Array.from({ length: category.usedChests }, (_, index) => (
+                    <button
+                      key={`${section.id}-${category.reservationId}-${index}`}
+                      type="button"
+                      className="chest-cell assigned"
+                      title={`${category.category}: chest ${index + 1}`}
+                      aria-label={`${category.category}, chest ${index + 1}`}
+                      style={{ '--reservation-color': category.color }}
+                      draggable
+                      onDragStart={(event) => {
+                        event.dataTransfer.setData('text/plain', category.reservationId);
+                        event.dataTransfer.effectAllowed = 'move';
+                        setDraggedReservationId(category.reservationId);
+                      }}
+                      onDragEnd={() => setDraggedReservationId(null)}
+                    />
+                  )))}
+                  {Array.from({ length: section.remainingChests }, (_, index) => (
+                    <div key={`empty-${section.id}-${index}`} className="chest-cell empty" aria-label="Unreserved chest" />
                   ))}
                 </div>
-              )}
-            </div>
-          ))}
+
+                <div className="section-legend">
+                  {section.categories.map((category) => (
+                    <span key={`${section.id}-${category.reservationId}`}>
+                      <i style={{ backgroundColor: category.color }} />
+                      {category.category} ({category.usedChests})
+                    </span>
+                  ))}
+                  {section.remainingChests > 0 && <span className="legend-empty">{section.remainingChests} unreserved</span>}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
     </div>
