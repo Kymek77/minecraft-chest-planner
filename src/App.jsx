@@ -14,6 +14,7 @@ const CHEST_CAPACITY = {
   single: 27,
   double: 54,
 };
+const MAX_SHARED_POOL_ITEM_TYPES = 6;
 
 const defaultStorageConfig = {
   totalChests: 600,
@@ -90,7 +91,7 @@ const survivalPresetPoolLabelForItem = (item, groupId) => {
     if (/(glass|pane)/.test(id)) return 'Glass blocks and panes';
     if (/(lantern|torch|candle|lightning_rod)/.test(id)) return 'Lighting fixtures';
     if (/(ladder|scaffolding|chain|iron_bars)/.test(id)) return 'Construction utility';
-    return 'Uncommon building blocks';
+    return `Individual building item: ${item.name}`;
   }
   if (groupId === 'preset-wood') {
     if (woodType) return `${title(woodType)} natural blocks`;
@@ -100,14 +101,14 @@ const survivalPresetPoolLabelForItem = (item, groupId) => {
     if (/(dye|ink_sac|bone_meal)/.test(id)) return 'Dyes and pigments';
     if (/(leather|string|rabbit_hide|feather)/.test(id)) return 'Textiles and hides';
     if (/(powder|shard|crystal|dust)/.test(id)) return 'Dusts and crystals';
-    return 'Crafting materials';
+    return `Individual crafting material: ${item.name}`;
   }
   if (groupId === 'preset-tools') return /(enchant|book|anvil|grindstone|smithing)/.test(id) ? 'Enchanting and smithing' : 'Rare equipment';
   if (groupId === 'preset-food') return /(seed|sapling)/.test(id) ? 'Seeds and starters' : /(potion|bottle)/.test(id) ? 'Brewing ingredients' : 'Prepared food';
   if (groupId === 'preset-mobs') return /(head|skull|disc|totem|saddle|horse_armor)/.test(id) ? 'Rare trophies' : /(spawn_egg)/.test(id) ? 'Spawn eggs' : 'Uncommon mob drops';
   if (groupId === 'preset-redstone') return /(rail|minecart)/.test(id) ? 'Rails and minecarts' : /(piston|observer|hopper|dispenser|dropper)/.test(id) ? 'Redstone machines' : 'Redstone circuits';
   if (groupId === 'preset-nether') return /(end_|dragon|chorus|purpur|shulker)/.test(id) ? 'End finds' : /(bastion|piglin|ancient_debris)/.test(id) ? 'Bastion loot' : 'Nether finds';
-  return /(painting|item_frame|armor_stand)/.test(id) ? 'Display decorations' : 'Uncommon decorations';
+  return /(painting|item_frame|armor_stand)/.test(id) ? 'Display decorations' : `Individual decoration: ${item.name}`;
 };
 
 const bulkReservationWeights = {
@@ -766,13 +767,13 @@ function App() {
       poolBuckets.get(key).items.push(item);
     });
     const pools = [...poolBuckets.values()].flatMap((bucket) =>
-      Array.from({ length: Math.ceil(bucket.items.length / CHEST_CAPACITY.double) }, (_, index) => {
-        const chunk = bucket.items.slice(index * CHEST_CAPACITY.double, (index + 1) * CHEST_CAPACITY.double);
+      Array.from({ length: Math.ceil(bucket.items.length / MAX_SHARED_POOL_ITEM_TYPES) }, (_, index) => {
+        const chunk = bucket.items.slice(index * MAX_SHARED_POOL_ITEM_TYPES, (index + 1) * MAX_SHARED_POOL_ITEM_TYPES);
         const rangeLabel = chunk.length > 1 ? `${chunk[0].name} to ${chunk.at(-1).name}` : chunk[0].name;
         return {
           id: `preset-${bucket.groupId}-${bucket.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${index + 1}`,
           groupId: bucket.groupId,
-          label: bucket.items.length > CHEST_CAPACITY.double ? `${bucket.label}: ${rangeLabel}` : bucket.label,
+          label: bucket.items.length > MAX_SHARED_POOL_ITEM_TYPES ? `${bucket.label}: ${rangeLabel}` : bucket.label,
           itemIds: chunk.map((item) => item.id),
         };
       }),
