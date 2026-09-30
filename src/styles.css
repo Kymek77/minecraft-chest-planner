@@ -342,7 +342,7 @@ input:focus, select:focus {
 .group-tab-target {
   display: inline-flex;
   align-items: center;
-  gap: 0;
+  gap: 2px;
 }
 
 .delete-control {
@@ -373,12 +373,10 @@ input:focus, select:focus {
 .group-tab-target .delete-control {
   width: 25px;
   height: 25px;
-  margin-left: -29px;
-  z-index: 1;
 }
 
 .group-tab-target .tab {
-  padding-right: 34px;
+  padding-right: 12px;
 }
 
 .search-box input {
@@ -453,16 +451,21 @@ input:focus, select:focus {
   background: rgba(15, 23, 42, 0.54);
 }
 
-.pool-drop-target .delete-control {
-  position: absolute;
-  top: 4px;
-  right: 4px;
+.pool-name-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
 }
 
-.pool-drop-target .pool-edit-control {
-  position: absolute;
-  top: 4px;
-  right: 31px;
+.pool-name-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pool-name-row input {
+  min-width: 0;
 }
 
 .pool-drop-target.drag-over,
@@ -757,6 +760,26 @@ input:focus, select:focus {
 
 .reservation-card:active {
   cursor: grabbing;
+}
+
+.reservation-group-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px;
+  border: 1px solid rgba(52, 211, 153, 0.45);
+  border-radius: 8px;
+  background: rgba(52, 211, 153, 0.09);
+  cursor: grab;
+}
+
+.reservation-group-card:active {
+  cursor: grabbing;
+}
+
+.reservation-group-card small {
+  color: var(--muted);
+  font-size: 0.72rem;
 }
 
 .reservation-swatch {

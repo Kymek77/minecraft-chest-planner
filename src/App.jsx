@@ -193,7 +193,6 @@ function App() {
         if (!active) return;
         setMinecraftItems(items);
         setIncludedItems(makeIncludedItemMap(items));
-        setSelectedPreset('survival');
         const sourceLag = publicReleaseInfo.latestRelease !== latestSupported
           ? ` Public latest is ${publicReleaseInfo.latestRelease}; item data currently reaches ${latestSupported}.`
           : '';
@@ -349,6 +348,7 @@ function App() {
         .filter((pool) => pool.chestCount > 0)
         .map((pool) => ({
           id: pool.id,
+          groupId: group.id,
           label: `${group.label}: ${pool.label}`,
           chestCount: pool.chestCount,
           itemPreview: pool.items.slice(0, 3).map((item) => item.name),
@@ -356,6 +356,7 @@ function App() {
         }));
       const dedicatedEntries = groupPlan.dedicatedItems.map(({ item, chestCount }) => ({
         id: `${group.id}-${item.id}`,
+        groupId: group.id,
         label: item.name,
         chestCount,
         itemPreview: [item.name],
@@ -558,6 +559,24 @@ function App() {
       [reservationId]: sectionId ? Number(sectionId) : undefined,
     }));
   };
+
+  const moveGroupReservationsToSection = (groupId, sectionId) => {
+    const reservationIds = storagePlanEntries
+      .filter((entry) => entry.groupId === groupId)
+      .map((entry) => entry.id);
+    setReservationSectionOverrides((current) => ({
+      ...current,
+      ...Object.fromEntries(reservationIds.map((reservationId) => [reservationId, sectionId ? Number(sectionId) : undefined])),
+    }));
+  };
+
+  const groupedReservations = useMemo(
+    () => customStorageGroups.map((group) => ({
+      ...group,
+      entries: storagePlanEntries.filter((entry) => entry.groupId === group.id),
+    })).filter((group) => group.entries.length > 0),
+    [customStorageGroups, storagePlanEntries],
+  );
 
   const addStorageGroup = () => {
     const label = newStorageGroupName.trim();
@@ -974,8 +993,30 @@ function App() {
             <div className="pool-list">
               {storagePlanByGroupId[selectedCategory]?.pools.map((pool) => (
                 <ItemDropTarget key={pool.id} id={`pool:${pool.id}`} className="pool-drop-target">
-                  <div>
-                    {editingPoolId === pool.id ? <input value={renameDraft} onChange={(event) => setRenameDraft(event.target.value)} autoFocus /> : <strong>{pool.label}</strong>}
+                  <div className="pool-details">
+                    <div className="pool-name-row">
+                      {editingPoolId === pool.id ? <input value={renameDraft} onChange={(event) => setRenameDraft(event.target.value)} autoFocus /> : <strong>{pool.label}</strong>}
+                      <button
+                        type="button"
+                        className="edit-control"
+                        aria-label={`Rename ${pool.label} pool`}
+                        onClick={() => {
+                          if (editingPoolId === pool.id) confirmPoolRename(pool.id);
+                          else { setEditingPoolId(pool.id); setRenameDraft(pool.label); }
+                        }}
+                      >
+                        {editingPoolId === pool.id ? <Check size={15} /> : <Pencil size={14} />}
+                      </button>
+                      <button
+                        type="button"
+                        className="delete-control"
+                        aria-label={`Delete ${pool.label} pool`}
+                        title={`Delete ${pool.label} pool`}
+                        onClick={() => deleteStoragePool(pool.id)}
+                      >
+                        <Trash2 size={15} strokeWidth={2} aria-hidden="true" />
+                      </button>
+                    </div>
                     <small>{pool.items.length} item types; minimum {pool.minimumChests} chest{pool.minimumChests === 1 ? '' : 's'}.</small>
                   </div>
                   <label>
@@ -987,26 +1028,6 @@ function App() {
                       onChange={(event) => setSharedPoolChests(pool.id, event.target.value)}
                     />
                   </label>
-                  <button
-                    type="button"
-                    className="edit-control pool-edit-control"
-                    aria-label={`Rename ${pool.label} pool`}
-                    onClick={() => {
-                      if (editingPoolId === pool.id) confirmPoolRename(pool.id);
-                      else { setEditingPoolId(pool.id); setRenameDraft(pool.label); }
-                    }}
-                  >
-                    {editingPoolId === pool.id ? <Check size={15} /> : <Pencil size={14} />}
-                  </button>
-                  <button
-                    type="button"
-                    className="delete-control"
-                    aria-label={`Delete ${pool.label} pool`}
-                    title={`Delete ${pool.label} pool`}
-                    onClick={() => deleteStoragePool(pool.id)}
-                  >
-                    <Trash2 size={15} strokeWidth={2} aria-hidden="true" />
-                  </button>
                 </ItemDropTarget>
               ))}
             </div>
@@ -1144,6 +1165,22 @@ function App() {
               <span>{reservedChests} chests</span>
             </div>
             <div className="reservation-list">
+              {groupedReservations.map((group) => (
+                <div
+                  key={group.id}
+                  className="reservation-group-card"
+                  draggable
+                  onDragStart={(event) => {
+                    event.dataTransfer.setData('text/plain', `group:${group.id}`);
+                    event.dataTransfer.effectAllowed = 'move';
+                    setDraggedReservationId(`group:${group.id}`);
+                  }}
+                  onDragEnd={() => setDraggedReservationId(null)}
+                >
+                  <strong>{group.label}</strong>
+                  <small>{group.entries.length} reservations, {group.entries.reduce((total, entry) => total + entry.chestCount, 0)} chests</small>
+                </div>
+              ))}
               {storagePlanEntries.map((entry) => (
                 <div
                   key={entry.id}
@@ -1197,7 +1234,8 @@ function App() {
                 onDrop={(event) => {
                   event.preventDefault();
                   const reservationId = event.dataTransfer.getData('text/plain') || draggedReservationId;
-                  if (reservationId) moveReservationToSection(reservationId, section.id);
+                  if (reservationId?.startsWith('group:')) moveGroupReservationsToSection(reservationId.replace(/^group:/, ''), section.id);
+                  else if (reservationId) moveReservationToSection(reservationId, section.id);
                   setDraggedReservationId(null);
                 }}
               >
