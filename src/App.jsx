@@ -20,6 +20,7 @@ const defaultStorageConfig = {
   chestsPerSection: 75,
   totalSections: 8,
 };
+const DEFAULT_MINECRAFT_VERSION = '26.3';
 
 const survivalPresetGroups = [
   { id: 'preset-building', label: 'Building blocks', chests: 120 },
@@ -111,7 +112,7 @@ const defaultSurvivalDedicatedGroupByItemId = Object.fromEntries(
 );
 
 const unassignedStorageGroup = { id: 'unassigned', label: 'Unassigned' };
-const TEXTURE_VERSION = '1.21.4';
+const TEXTURE_VERSION = DEFAULT_MINECRAFT_VERSION;
 const MCASSET_ASSETS = 'https://assets.mcasset.cloud';
 const modelTexturePromises = new Map();
 
@@ -216,7 +217,7 @@ function App() {
   const draggedItemIdRef = useRef(null);
 
   const [minecraftItems, setMinecraftItems] = useState(fallbackMinecraftItems);
-  const [minecraftVersion, setMinecraftVersion] = useState(null);
+  const [minecraftVersion, setMinecraftVersion] = useState(DEFAULT_MINECRAFT_VERSION);
   const [minecraftVersions, setMinecraftVersions] = useState([]);
   const [latestPublicVersion, setLatestPublicVersion] = useState(null);
   const [latestSupportedVersion, setLatestSupportedVersion] = useState(null);
