@@ -23,23 +23,21 @@ const defaultStorageConfig = {
 
 const unassignedStorageGroup = { id: 'unassigned', label: 'Unassigned' };
 const TEXTURE_VERSION = '1.21.4';
-const MINECRAFT_ASSETS_REPO = 'https://raw.githubusercontent.com/PrismarineJS/minecraft-assets/master/data';
+const MCASSET_ASSETS = 'https://assets.mcasset.cloud';
 
 const reservationColor = (id) => {
   const value = Array.from(id).reduce((total, character) => ((total * 31) + character.charCodeAt(0)) >>> 0, 7);
   return `hsl(${value % 360} 62% 56%)`;
 };
 
-function MinecraftItemIcon({ itemId, className = '' }) {
-  const [textureFolder, setTextureFolder] = useState('items');
+function MinecraftItemIcon({ item, assetVersion, className = '' }) {
   const [missingTexture, setMissingTexture] = useState(false);
-  const textureName = itemId?.replace(/^minecraft:/, '') || 'barrier';
-  const textureFile = textureFolder === 'fallback' ? 'diamond' : textureName;
+  const textureName = item?.id?.replace(/^minecraft:/, '') || 'barrier';
+  const textureFolder = item?.isBlock ? 'block' : 'item';
 
   useEffect(() => {
-    setTextureFolder('items');
     setMissingTexture(false);
-  }, [itemId]);
+  }, [assetVersion, item?.id, item?.isBlock]);
 
   if (missingTexture) {
     return <span className={`minecraft-item-icon missing ${className}`} aria-hidden="true" />;
@@ -48,13 +46,11 @@ function MinecraftItemIcon({ itemId, className = '' }) {
   return (
     <span className={`minecraft-item-icon ${className}`}>
       <img
-        src={`${MINECRAFT_ASSETS_REPO}/${TEXTURE_VERSION}/${textureFolder === 'fallback' ? 'items' : textureFolder}/${textureFile}.png`}
+        src={`${MCASSET_ASSETS}/${assetVersion || TEXTURE_VERSION}/assets/minecraft/textures/${textureFolder}/${textureName}.png`}
         alt=""
         loading="lazy"
         onError={() => {
-          if (textureFolder === 'items') setTextureFolder('blocks');
-          else if (textureFolder === 'blocks') setTextureFolder('fallback');
-          else setMissingTexture(true);
+          setMissingTexture(true);
         }}
       />
     </span>
@@ -248,14 +244,14 @@ function App() {
         label: `${group.label} shared storage`,
         chestCount: groupPlan.sharedChests,
         itemPreview: groupPlan.sharedItems.slice(0, 3).map((item) => item.name),
-        iconItemId: groupPlan.sharedItems[0]?.id,
+        iconItem: groupPlan.sharedItems[0],
       }] : [];
       const dedicatedEntries = groupPlan.dedicatedItems.map(({ item, chestCount }) => ({
         id: `${group.id}-${item.id}`,
         label: item.name,
         chestCount,
         itemPreview: [item.name],
-        iconItemId: item.id,
+        iconItem: item,
       }));
 
       return [...dedicatedEntries, ...sharedEntry];
@@ -332,7 +328,7 @@ function App() {
           category: entry.label,
           usedChests: allocated,
           itemPreview: entry.itemPreview,
-          iconItemId: entry.iconItemId,
+          iconItem: entry.iconItem,
           color: reservationColor(entry.id),
         });
         remainingByReservation[entry.id] -= allocated;
@@ -752,7 +748,7 @@ function App() {
                 <div key={item.id} className={checked ? 'inventory-card selected' : 'inventory-card'}>
                   <div className="inventory-card-header">
                     <div className="item-title">
-                      <MinecraftItemIcon itemId={item.id} />
+                      <MinecraftItemIcon item={item} assetVersion={minecraftVersion || TEXTURE_VERSION} />
                       <strong>{item.name}</strong>
                     </div>
                     <label className="toggle-label">
@@ -839,7 +835,7 @@ function App() {
             <div className="priority-list">
               {priorityItems.map((item) => (
                 <div key={item.id} className="priority-row">
-                  <MinecraftItemIcon itemId={item.id} />
+                  <MinecraftItemIcon item={item} assetVersion={minecraftVersion || TEXTURE_VERSION} />
                   <div>
                     <strong>{item.name}</strong>
                     <small>{storageGroupById[itemStorageGroups[item.id]].label}</small>
@@ -884,7 +880,7 @@ function App() {
                   <span className="reservation-swatch" style={{ backgroundColor: reservationColor(entry.id) }} />
                   <div className="reservation-card-copy">
                     <div className="item-title">
-                      <MinecraftItemIcon itemId={entry.iconItemId} />
+                      <MinecraftItemIcon item={entry.iconItem} assetVersion={minecraftVersion || TEXTURE_VERSION} />
                       <strong>{entry.label}</strong>
                     </div>
                     <small>{entry.chestCount} chest{entry.chestCount === 1 ? '' : 's'} • {entry.itemPreview.join(', ')}</small>
@@ -958,7 +954,7 @@ function App() {
                   {section.categories.map((category) => (
                     <span key={`${section.id}-${category.reservationId}`}>
                       <i style={{ backgroundColor: category.color }} />
-                      <MinecraftItemIcon itemId={category.iconItemId} className="legend-icon" />
+                      <MinecraftItemIcon item={category.iconItem} assetVersion={minecraftVersion || TEXTURE_VERSION} className="legend-icon" />
                       {category.category} ({category.usedChests})
                     </span>
                   ))}

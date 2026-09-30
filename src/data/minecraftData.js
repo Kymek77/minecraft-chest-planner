@@ -12,7 +12,7 @@ const displayNameFromId = (name) =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
 
-const normalizeItem = (item, source = 'minecraft-data') => {
+const normalizeItem = (item, source = 'minecraft-data', blockNames = new Set()) => {
   const id = typeof item.id === 'string' && item.id.includes(':') ? item.id : `minecraft:${item.name}`;
   const itemName = id.replace(/^minecraft:/, '');
   return {
@@ -21,6 +21,7 @@ const normalizeItem = (item, source = 'minecraft-data') => {
     stack: item.stackSize || item.stack || 64,
     maxDurability: item.maxDurability || null,
     enchantCategories: Array.isArray(item.enchantCategories) ? item.enchantCategories : [],
+    isBlock: blockNames.has(itemName),
     source,
   };
 };
@@ -61,11 +62,18 @@ export const fetchMojangReleaseVersions = async () => {
 
 export const fetchMinecraftItems = async (version, metadataFallbackVersion) => {
   try {
-    const response = await fetch(`${MINECRAFT_DATA_REPO}/${encodeURIComponent(version)}/items.json`);
+    const [response, blocksResponse] = await Promise.all([
+      fetch(`${MINECRAFT_DATA_REPO}/${encodeURIComponent(version)}/items.json`),
+      fetch(`${MINECRAFT_DATA_REPO}/${encodeURIComponent(version)}/blocks.json`),
+    ]);
     if (response.ok) {
-      const items = await response.json();
+      const [items, blocks] = await Promise.all([
+        response.json(),
+        blocksResponse.ok ? blocksResponse.json() : [],
+      ]);
+      const blockNames = new Set(blocks.map((block) => block.name));
       return {
-        items: items.filter((item) => item.name !== 'air').map((item) => normalizeItem(item)),
+        items: items.filter((item) => item.name !== 'air').map((item) => normalizeItem(item, 'minecraft-data', blockNames)),
         source: 'minecraft-data',
       };
     }
@@ -73,10 +81,14 @@ export const fetchMinecraftItems = async (version, metadataFallbackVersion) => {
     // Try mcmeta when minecraft-data is unavailable for this version.
   }
 
-  const [mcmetaResponse, metadataResponse] = await Promise.all([
+  const [mcmetaResponse, mcmetaBlocksResponse, metadataResponse, metadataBlocksResponse] = await Promise.all([
     fetch(`${MCMETA_REPO}/${encodeURIComponent(version)}-registries/item/data.json`),
+    fetch(`${MCMETA_REPO}/${encodeURIComponent(version)}-registries/block/data.json`),
     metadataFallbackVersion
       ? fetch(`${MINECRAFT_DATA_REPO}/${encodeURIComponent(metadataFallbackVersion)}/items.json`)
+      : Promise.resolve(null),
+    metadataFallbackVersion
+      ? fetch(`${MINECRAFT_DATA_REPO}/${encodeURIComponent(metadataFallbackVersion)}/blocks.json`)
       : Promise.resolve(null),
   ]);
 
@@ -85,6 +97,9 @@ export const fetchMinecraftItems = async (version, metadataFallbackVersion) => {
 
   const itemNames = await response.json();
   const metadataItems = metadataResponse?.ok ? await metadataResponse.json() : [];
+  const mcmetaBlockNames = mcmetaBlocksResponse.ok ? new Set(await mcmetaBlocksResponse.json()) : new Set();
+  const metadataBlockNames = metadataBlocksResponse?.ok ? new Set((await metadataBlocksResponse.json()).map((block) => block.name)) : new Set();
+  const blockNames = new Set([...mcmetaBlockNames, ...metadataBlockNames]);
   const metadataByName = Object.fromEntries(metadataItems.map((item) => [item.name, item]));
   const unclassifiedNames = itemNames.filter((name) => name !== 'air' && !metadataByName[name]);
 
@@ -92,8 +107,8 @@ export const fetchMinecraftItems = async (version, metadataFallbackVersion) => {
     items: itemNames
       .filter((name) => name !== 'air')
       .map((name) => metadataByName[name]
-        ? normalizeItem(metadataByName[name])
-        : normalizeItem({ name, displayName: displayNameFromId(name) }, 'mcmeta')),
+        ? normalizeItem(metadataByName[name], 'minecraft-data', blockNames)
+        : normalizeItem({ name, displayName: displayNameFromId(name) }, 'mcmeta', blockNames)),
     source: metadataFallbackVersion
       ? `mcmeta (metadata cross-checked with minecraft-data ${metadataFallbackVersion})`
       : 'mcmeta',
