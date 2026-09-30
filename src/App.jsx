@@ -46,6 +46,22 @@ const survivalPresetGroupForItem = (item) => {
   return 'preset-misc';
 };
 
+// Practical starter reservations for items players commonly accumulate in bulk.
+const commonSurvivalReservations = {
+  cobblestone: 5, stone: 3, cobbled_deepslate: 3, dirt: 3, grass_block: 2, sand: 2, red_sand: 1, gravel: 2,
+  granite: 2, diorite: 2, andesite: 2, tuff: 2, calcite: 1, dripstone_block: 1,
+  oak_log: 3, spruce_log: 2, birch_log: 2, jungle_log: 2, acacia_log: 2, dark_oak_log: 2, mangrove_log: 2, cherry_log: 2,
+  oak_planks: 3, spruce_planks: 2, birch_planks: 2, jungle_planks: 2, acacia_planks: 2, dark_oak_planks: 2, mangrove_planks: 2, cherry_planks: 2,
+  iron_ingot: 3, gold_ingot: 2, copper_ingot: 2, coal: 2, redstone: 2, lapis_lazuli: 1, diamond: 1, emerald: 1, quartz: 1,
+  raw_iron: 2, raw_gold: 1, raw_copper: 1, glass: 2, white_wool: 2, bone_meal: 1,
+  wheat: 2, carrot: 2, potato: 2, beetroot: 1, pumpkin: 1, melon_slice: 1, sugar_cane: 1, bamboo: 2, kelp: 1, cooked_beef: 2,
+  rotten_flesh: 2, bone: 2, string: 2, gunpowder: 2, spider_eye: 1, slime_ball: 1, ender_pearl: 1, arrow: 2,
+  redstone_torch: 1, piston: 1, sticky_piston: 1, hopper: 1, dispenser: 1, dropper: 1, rail: 2, powered_rail: 1,
+  netherrack: 3, soul_sand: 1, soul_soil: 1, glowstone_dust: 1, blaze_rod: 1, nether_wart: 1, end_stone: 2,
+};
+
+const survivalPresetDedicatedChests = (item) => commonSurvivalReservations[item.id.replace(/^minecraft:/, '')] || 0;
+
 const unassignedStorageGroup = { id: 'unassigned', label: 'Unassigned' };
 const TEXTURE_VERSION = '1.21.4';
 const MCASSET_ASSETS = 'https://assets.mcasset.cloud';
@@ -681,10 +697,15 @@ function App() {
     const pools = survivalPresetGroups.map((group) => ({
       id: `${group.id}-pool`,
       groupId: group.id,
-      label: 'Shared storage',
+      label: 'Low-volume and rare items',
     }));
     const poolByGroupId = Object.fromEntries(pools.map((pool) => [pool.groupId, pool.id]));
     const itemGroups = Object.fromEntries(survivalItems.map((item) => [item.id, survivalPresetGroupForItem(item)]));
+    const dedicatedChests = Object.fromEntries(survivalItems.map((item) => [item.id, survivalPresetDedicatedChests(item)]));
+    const dedicatedChestsByGroup = Object.fromEntries(survivalPresetGroups.map((group) => [group.id, 0]));
+    survivalItems.forEach((item) => {
+      dedicatedChestsByGroup[itemGroups[item.id]] += dedicatedChests[item.id];
+    });
 
     setSelectedPreset('survival-600');
     setStorageConfig(defaultStorageConfig);
@@ -694,9 +715,15 @@ function App() {
     setCustomStorageGroups(survivalPresetGroups.map(({ id, label }) => ({ id, label })));
     setCustomStoragePools(pools);
     setItemGroupOverrides(itemGroups);
-    setItemPoolOverrides(Object.fromEntries(survivalItems.map((item) => [item.id, poolByGroupId[itemGroups[item.id]]])));
-    setItemDedicatedChestOverrides(Object.fromEntries(survivalItems.map((item) => [item.id, 0])));
-    setStorageGroupChestOverrides(Object.fromEntries(survivalPresetGroups.map((group) => [`${group.id}-pool`, group.chests])));
+    setItemPoolOverrides(Object.fromEntries(survivalItems.map((item) => [
+      item.id,
+      dedicatedChests[item.id] > 0 ? undefined : poolByGroupId[itemGroups[item.id]],
+    ])));
+    setItemDedicatedChestOverrides(dedicatedChests);
+    setStorageGroupChestOverrides(Object.fromEntries(survivalPresetGroups.map((group) => [
+      `${group.id}-pool`,
+      Math.max(0, group.chests - dedicatedChestsByGroup[group.id]),
+    ])));
     setReservationSectionOverrides({});
     setSelectedCategory(survivalPresetGroups[0].id);
   };
