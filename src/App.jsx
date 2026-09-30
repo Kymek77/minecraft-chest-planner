@@ -8,7 +8,6 @@ import {
   fetchMojangReleaseVersions,
   fetchMinecraftVersions,
   fallbackMinecraftItems,
-  nonSurvivalItemIds,
 } from './data/minecraftData';
 
 const CHEST_CAPACITY = {
@@ -22,42 +21,7 @@ const defaultStorageConfig = {
   totalSections: 8,
 };
 
-const storageGroups = [
-  { id: 'building', label: 'Building blocks', tags: ['stairs', 'slabs', 'walls', 'fences', 'doors', 'trapdoors', 'buttons', 'pressure_plates', 'terracotta', 'concrete', 'wool'] },
-  { id: 'wood', label: 'Wood and plants', tags: ['logs', 'planks', 'saplings', 'leaves'] },
-  { id: 'resources', label: 'Resources and ores', tags: ['ores', 'coal_ores', 'iron_ores', 'gold_ores', 'copper_ores', 'diamond_ores', 'emerald_ores', 'lapis_ores', 'redstone_ores'] },
-  { id: 'redstone', label: 'Redstone and automation', tags: ['rails'] },
-  { id: 'tools', label: 'Tools and combat', tags: ['axes', 'pickaxes', 'shovels', 'hoes', 'swords', 'spears', 'bows', 'crossbows', 'head_armor', 'chest_armor', 'leg_armor', 'foot_armor'] },
-  { id: 'food', label: 'Food and farming', tags: ['meat', 'fishes', 'flowers', 'small_flowers', 'crops', 'villager_plantable_seeds'] },
-  { id: 'transport', label: 'Transport and storage', tags: ['boats', 'chest_boats', 'shulker_boxes'] },
-  { id: 'decor', label: 'Decor and collectibles', tags: ['dyes', 'banners', 'candles', 'lanterns', 'skulls'] },
-  { id: 'mob', label: 'Mob drops', tags: [] },
-  { id: 'utility', label: 'Utility and brewing', tags: [] },
-  { id: 'misc', label: 'Miscellaneous', tags: [] },
-];
-
-const storageGroupById = Object.fromEntries(storageGroups.map((group) => [group.id, group]));
-
-const getDefaultStorageGroup = (item) => {
-  const tags = new Set(item.tags || []);
-  const matchingGroup = storageGroups.find((group) => group.tags.some((tag) => tags.has(tag)));
-  if (matchingGroup) return matchingGroup.id;
-
-  const categoryMap = {
-    Building: 'building',
-    Resources: 'resources',
-    'Redstone & Automation': 'redstone',
-    Combat: 'tools',
-    'Tools & Equipment': 'tools',
-    'Food & Brewing': 'food',
-    'Farming & Nature': 'food',
-    'Transport & Storage': 'transport',
-    'Decoration & Collectibles': 'decor',
-    'Mob Drops': 'mob',
-    Technical: 'misc',
-  };
-  return categoryMap[item.category] || 'utility';
-};
+const unassignedStorageGroup = { id: 'unassigned', label: 'Unassigned' };
 
 const makeIncludedItemMap = (items, selectedIds = items.map((item) => item.id)) => {
   const map = {};
@@ -78,16 +42,15 @@ function App() {
   const [dataStatus, setDataStatus] = useState('Loading version data...');
   const [storageConfig, setStorageConfig] = useState(defaultStorageConfig);
   const [chestType, setChestType] = useState('double');
-  const [selectedCategory, setSelectedCategory] = useState('building');
-  const [selectedSubcategory, setSelectedSubcategory] = useState('All');
-  const [selectedForm, setSelectedForm] = useState('All');
+  const [selectedCategory, setSelectedCategory] = useState(unassignedStorageGroup.id);
   const [selectedTag, setSelectedTag] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPreset, setSelectedPreset] = useState('survival');
-  const [itemScope, setItemScope] = useState('survival');
   const [itemOrder, setItemOrder] = useState('class');
   const [includedItems, setIncludedItems] = useState(() => makeIncludedItemMap(fallbackMinecraftItems));
   const [itemGroupOverrides, setItemGroupOverrides] = useState({});
+  const [customStorageGroups, setCustomStorageGroups] = useState([]);
+  const [newStorageGroupName, setNewStorageGroupName] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -128,10 +91,10 @@ function App() {
         const sourceLag = publicReleaseInfo.latestRelease !== latestSupported
           ? ` Public latest is ${publicReleaseInfo.latestRelease}; item data currently reaches ${latestSupported}.`
           : '';
-        const unclassifiedStatus = unclassifiedCount > 0
-          ? ` ${unclassifiedCount} item${unclassifiedCount === 1 ? '' : 's'} need class review for this version.`
+        const metadataGapStatus = unclassifiedCount > 0
+          ? ` ${unclassifiedCount} item${unclassifiedCount === 1 ? '' : 's'} are available only from mcmeta, without minecraft-data metadata.`
           : '';
-        setDataStatus(`${items.length.toLocaleString()} items loaded from ${source}.${sourceLag}${unclassifiedStatus}`);
+        setDataStatus(`${items.length.toLocaleString()} items loaded from ${source}.${sourceLag}${metadataGapStatus}`);
       } catch (error) {
         if (!active) return;
         setDataStatus('Using the built-in catalog. Unable to reach minecraft-data.');
@@ -174,19 +137,18 @@ function App() {
 
   const chestSlotsPerChest = CHEST_CAPACITY[chestType];
   const totalSlots = storageConfig.totalChests * chestSlotsPerChest;
-
-  const availableItems = useMemo(
-    () =>
-      itemScope === 'all'
-        ? minecraftItems
-        : minecraftItems.filter((item) => !nonSurvivalItemIds.has(item.id)),
-    [itemScope, minecraftItems],
+  const storageGroups = useMemo(() => [unassignedStorageGroup, ...customStorageGroups], [customStorageGroups]);
+  const storageGroupById = useMemo(
+    () => Object.fromEntries(storageGroups.map((group) => [group.id, group])),
+    [storageGroups],
   );
+
+  const availableItems = minecraftItems;
 
   const itemStorageGroups = useMemo(
     () => Object.fromEntries(minecraftItems.map((item) => [
       item.id,
-      itemGroupOverrides[item.id] || getDefaultStorageGroup(item),
+      itemGroupOverrides[item.id] || unassignedStorageGroup.id,
     ])),
     [itemGroupOverrides, minecraftItems],
   );
@@ -199,7 +161,6 @@ function App() {
 
     return sorted.sort((a, b) =>
       (storageGroups.findIndex((group) => group.id === itemStorageGroups[a.id]) - storageGroups.findIndex((group) => group.id === itemStorageGroups[b.id])) ||
-      a.subcategory.localeCompare(b.subcategory) ||
       a.name.localeCompare(b.name) ||
       a.id.localeCompare(b.id),
     );
@@ -308,43 +269,21 @@ function App() {
     };
   }, [categoryGroups, selectedItems, sections, totalSlots]);
 
-  const subcategoryOptions = useMemo(() => {
-    const unique = new Set();
-    minecraftItems.forEach((item) => {
-      if (itemStorageGroups[item.id] === selectedCategory) {
-        unique.add(item.subcategory);
-      }
-    });
-    return ['All', ...Array.from(unique).sort()];
-  }, [itemStorageGroups, minecraftItems, selectedCategory]);
-
-  const formOptions = useMemo(() => {
-    const unique = new Set();
-    orderedAvailableItems.forEach((item) => {
-      if (itemStorageGroups[item.id] === selectedCategory && (selectedSubcategory === 'All' || item.subcategory === selectedSubcategory)) {
-        unique.add(item.form);
-      }
-    });
-    return ['All', ...Array.from(unique).sort()];
-  }, [itemStorageGroups, orderedAvailableItems, selectedCategory, selectedSubcategory]);
-
   const filteredItems = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
     return orderedAvailableItems.filter((item) => {
-      const categoryMatch = itemStorageGroups[item.id] === selectedCategory;
-      const subcategoryMatch = selectedSubcategory === 'All' || item.subcategory === selectedSubcategory;
-      const formMatch = selectedForm === 'All' || item.form === selectedForm;
+      const groupMatch = itemStorageGroups[item.id] === selectedCategory;
       const tagMatch = selectedTag === 'All' || item.tags?.includes(selectedTag);
       const queryMatch =
         normalizedQuery.length === 0 ||
         item.name.toLowerCase().includes(normalizedQuery) ||
         item.id.toLowerCase().includes(normalizedQuery) ||
-        item.category.toLowerCase().includes(normalizedQuery) ||
-        item.subcategory.toLowerCase().includes(normalizedQuery);
+        item.tags.some((tag) => tag.includes(normalizedQuery)) ||
+        item.enchantCategories.some((category) => category.includes(normalizedQuery));
 
-      return categoryMatch && subcategoryMatch && formMatch && tagMatch && queryMatch;
+      return groupMatch && tagMatch && queryMatch;
     });
-  }, [itemStorageGroups, orderedAvailableItems, searchQuery, selectedCategory, selectedForm, selectedSubcategory, selectedTag]);
+  }, [itemStorageGroups, orderedAvailableItems, searchQuery, selectedCategory, selectedTag]);
 
   const tagOptions = useMemo(() => {
     const tags = new Set();
@@ -365,7 +304,7 @@ function App() {
     () =>
       selectedItems
         .slice()
-        .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name))
+        .sort((a, b) => a.name.localeCompare(b.name))
         .slice(0, 8),
     [selectedItems],
   );
@@ -381,6 +320,15 @@ function App() {
     setItemGroupOverrides((current) => ({ ...current, [itemId]: groupId }));
   };
 
+  const addStorageGroup = () => {
+    const label = newStorageGroupName.trim();
+    if (!label) return;
+    const id = `group-${crypto.randomUUID()}`;
+    setCustomStorageGroups((current) => [...current, { id, label }]);
+    setNewStorageGroupName('');
+    setSelectedCategory(id);
+  };
+
   const applyPreset = (presetKey) => {
     const preset = inventoryPresets[presetKey];
     if (!preset) return;
@@ -393,6 +341,8 @@ function App() {
     setSelectedPreset('survival');
     setIncludedItems(makeIncludedItemMap(minecraftItems));
     setItemGroupOverrides({});
+    setCustomStorageGroups([]);
+    setSelectedCategory(unassignedStorageGroup.id);
   };
 
   const exportPlan = () => {
@@ -405,6 +355,7 @@ function App() {
         .filter(([, selected]) => selected)
         .map(([itemId]) => itemId),
       itemGroupOverrides,
+      customStorageGroups,
       generatedAt: new Date().toISOString(),
       sections: sectionPlans,
     };
@@ -436,6 +387,12 @@ function App() {
             Object.fromEntries(
               Object.entries(parsed.itemGroupOverrides).filter(([, groupId]) => storageGroupById[groupId]),
             ),
+          );
+        }
+
+        if (Array.isArray(parsed.customStorageGroups)) {
+          setCustomStorageGroups(
+            parsed.customStorageGroups.filter((group) => typeof group?.id === 'string' && typeof group?.label === 'string'),
           );
         }
 
@@ -565,26 +522,6 @@ function App() {
             </div>
           </div>
 
-          <div className="scope-block">
-            <div>
-              <h3>Item scope</h3>
-              <p className="helper-text">Choose which game items can receive storage assignments.</p>
-            </div>
-            <label className="switch-row">
-              <span>All items</span>
-              <input
-                type="checkbox"
-                role="switch"
-                checked={itemScope === 'all'}
-                onChange={(event) => setItemScope(event.target.checked ? 'all' : 'survival')}
-              />
-              <span className="switch-track" aria-hidden="true"><span /></span>
-            </label>
-            <small className="scope-status">
-              {itemScope === 'all' ? 'Includes technical and command-only entries.' : 'Survival-obtainable items only.'}
-            </small>
-          </div>
-
           <div className="import-export">
             <button type="button" className="primary-button" onClick={exportPlan}>Export JSON</button>
             <button type="button" className="secondary-button" onClick={() => fileInputRef.current?.click()}>
@@ -604,8 +541,6 @@ function App() {
                   className={selectedCategory === group.id ? 'tab active' : 'tab'}
                   onClick={() => {
                     setSelectedCategory(group.id);
-                    setSelectedSubcategory('All');
-                    setSelectedForm('All');
                     setSelectedTag('All');
                   }}
                 >
@@ -624,34 +559,12 @@ function App() {
             </div>
           </div>
 
-          <div className="subcategory-row">
-            {subcategoryOptions.map((subcategory) => (
-              <button
-                key={subcategory}
-                type="button"
-                className={selectedSubcategory === subcategory ? 'chip active' : 'chip'}
-                onClick={() => {
-                  setSelectedSubcategory(subcategory);
-                  setSelectedForm('All');
-                  setSelectedTag('All');
-                }}
-              >
-                {subcategory}
-              </button>
-            ))}
-          </div>
-
-          <div className="subcategory-row">
-            {formOptions.map((form) => (
-              <button
-                key={form}
-                type="button"
-                className={selectedForm === form ? 'chip active' : 'chip'}
-                onClick={() => setSelectedForm(form)}
-              >
-                {form}
-              </button>
-            ))}
+          <div className="group-creator">
+            <label>
+              New storage group
+              <input value={newStorageGroupName} onChange={(event) => setNewStorageGroupName(event.target.value)} placeholder="e.g. Mob drops" />
+            </label>
+            <button type="button" className="secondary-button" onClick={addStorageGroup}>Add group</button>
           </div>
 
           <div className="advanced-filter">
@@ -682,8 +595,9 @@ function App() {
 
                   <div className="inventory-card-meta">
                     <small>Store in: {storageGroupById[itemStorageGroups[item.id]].label}</small>
-                    <small>{[item.material, item.color, item.form, item.dimension].filter(Boolean).join(' • ')}</small>
-                    <small>{item.tags?.length || 0} official tags • class: {item.category} / {item.subcategory}</small>
+                    <small>Source: {item.source}</small>
+                    <small>Official tags: {item.tags.length ? item.tags.join(', ') : 'none'}</small>
+                    {item.enchantCategories.length > 0 && <small>Enchantment categories: {item.enchantCategories.join(', ')}</small>}
                   </div>
                   <label className="item-group-control">
                     Store in
@@ -742,7 +656,7 @@ function App() {
                 <div key={item.id} className="priority-row">
                   <div>
                     <strong>{item.name}</strong>
-                    <small>{storageGroupById[itemStorageGroups[item.id]].label} • {item.subcategory}</small>
+                    <small>{storageGroupById[itemStorageGroups[item.id]].label}</small>
                   </div>
                 </div>
               ))}
