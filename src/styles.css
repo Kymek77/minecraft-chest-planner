@@ -413,6 +413,37 @@ input:focus, select:focus {
   align-items: center;
 }
 
+.item-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.minecraft-item-icon {
+  display: inline-flex;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+}
+
+.minecraft-item-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.minecraft-item-icon.missing {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 3px;
+  background:
+    linear-gradient(45deg, transparent 44%, rgba(148, 163, 184, 0.38) 45% 55%, transparent 56%),
+    rgba(148, 163, 184, 0.08);
+}
+
 .inventory-card-header strong {
   font-size: 0.96rem;
 }
@@ -623,6 +654,12 @@ input:focus, select:focus {
   white-space: nowrap;
 }
 
+.reservation-card-copy .minecraft-item-icon {
+  flex-basis: 22px;
+  width: 22px;
+  height: 22px;
+}
+
 .reservation-card-copy small {
   color: var(--muted);
   font-size: 0.72rem;
@@ -744,6 +781,12 @@ input:focus, select:focus {
   width: 8px;
   height: 8px;
   border-radius: 2px;
+}
+
+.section-legend .minecraft-item-icon {
+  flex-basis: 16px;
+  width: 16px;
+  height: 16px;
 }
 
 .section-legend .legend-empty {
