@@ -21,6 +21,31 @@ const defaultStorageConfig = {
   totalSections: 8,
 };
 
+const survivalPresetGroups = [
+  { id: 'preset-building', label: 'Building blocks', chests: 120 },
+  { id: 'preset-wood', label: 'Wood and plants', chests: 75 },
+  { id: 'preset-materials', label: 'Ores and materials', chests: 80 },
+  { id: 'preset-tools', label: 'Tools and equipment', chests: 50 },
+  { id: 'preset-food', label: 'Food and farming', chests: 60 },
+  { id: 'preset-mobs', label: 'Mob drops and combat', chests: 60 },
+  { id: 'preset-redstone', label: 'Redstone and utility', chests: 50 },
+  { id: 'preset-nether', label: 'Nether and End', chests: 55 },
+  { id: 'preset-misc', label: 'Decorations and misc', chests: 50 },
+];
+
+const survivalPresetGroupForItem = (item) => {
+  const id = item.id.replace(/^minecraft:/, '');
+  if (/(nether|blaze|ghast|wither|shulker|chorus|purpur|end_|dragon|obsidian)/.test(id)) return 'preset-nether';
+  if (/(sword|pickaxe|axe|shovel|hoe|helmet|chestplate|leggings|boots|shield|elytra|bow|crossbow|trident|mace|fishing_rod|shears|flint_and_steel|compass|clock|map|bucket)/.test(id)) return 'preset-tools';
+  if (/(beef|pork|chicken|mutton|rabbit|cod|salmon|potato|carrot|beetroot|melon|apple|berry|bread|cookie|cake|stew|soup|pie|wheat|seeds|crop|sugar_cane|cocoa|egg|milk|honey|kelp)/.test(id)) return 'preset-food';
+  if (/(rotten|bone|string|spider|gunpowder|slime|leather|feather|phantom|ender_pearl|totem|skull|head|disc|arrow|fire_charge|magma_cream)/.test(id)) return 'preset-mobs';
+  if (/(redstone|repeater|comparator|piston|observer|hopper|dispenser|dropper|lever|button|pressure_plate|tripwire|daylight|target|rail|tnt|note_block|jukebox|lectern|crafter)/.test(id)) return 'preset-redstone';
+  if (/(log|wood|planks|sapling|leaves|mangrove|bamboo|cactus|vine|moss|flower|azalea|fungus|roots|lily|dirt|grass|podzol|mycelium)/.test(id)) return 'preset-wood';
+  if (/(diamond|emerald|iron|gold|copper|coal|lapis|quartz|amethyst|raw_|ingot|nugget|brick|clay|flint|stick|paper|book|dye|glass|terracotta|concrete|wool)/.test(id)) return 'preset-materials';
+  if (item.isBlock) return 'preset-building';
+  return 'preset-misc';
+};
+
 const unassignedStorageGroup = { id: 'unassigned', label: 'Unassigned' };
 const TEXTURE_VERSION = '1.21.4';
 const MCASSET_ASSETS = 'https://assets.mcasset.cloud';
@@ -133,6 +158,7 @@ function App() {
   const [latestSupportedVersion, setLatestSupportedVersion] = useState(null);
   const [dataStatus, setDataStatus] = useState('Loading version data...');
   const [storageConfig, setStorageConfig] = useState(defaultStorageConfig);
+  const [selectedPreset, setSelectedPreset] = useState('blank');
   const [chestType, setChestType] = useState('double');
   const [selectedCategory, setSelectedCategory] = useState(unassignedStorageGroup.id);
   const [searchQuery, setSearchQuery] = useState('');
@@ -637,6 +663,7 @@ function App() {
   };
 
   const resetToDefault = () => {
+    setSelectedPreset('blank');
     setItemScope('all');
     setIncludedItems(makeIncludedItemMap(minecraftItems));
     setItemGroupOverrides({});
@@ -647,6 +674,31 @@ function App() {
     setStorageGroupChestOverrides({});
     setReservationSectionOverrides({});
     setSelectedCategory(unassignedStorageGroup.id);
+  };
+
+  const applySurvivalPreset = () => {
+    const survivalItems = minecraftItems.filter((item) => !nonSurvivalItemIds.has(item.id));
+    const pools = survivalPresetGroups.map((group) => ({
+      id: `${group.id}-pool`,
+      groupId: group.id,
+      label: 'Shared storage',
+    }));
+    const poolByGroupId = Object.fromEntries(pools.map((pool) => [pool.groupId, pool.id]));
+    const itemGroups = Object.fromEntries(survivalItems.map((item) => [item.id, survivalPresetGroupForItem(item)]));
+
+    setSelectedPreset('survival-600');
+    setStorageConfig(defaultStorageConfig);
+    setChestType('double');
+    setItemScope('survival');
+    setIncludedItems(makeIncludedItemMap(minecraftItems, survivalItems.map((item) => item.id)));
+    setCustomStorageGroups(survivalPresetGroups.map(({ id, label }) => ({ id, label })));
+    setCustomStoragePools(pools);
+    setItemGroupOverrides(itemGroups);
+    setItemPoolOverrides(Object.fromEntries(survivalItems.map((item) => [item.id, poolByGroupId[itemGroups[item.id]]])));
+    setItemDedicatedChestOverrides(Object.fromEntries(survivalItems.map((item) => [item.id, 0])));
+    setStorageGroupChestOverrides(Object.fromEntries(survivalPresetGroups.map((group) => [`${group.id}-pool`, group.chests])));
+    setReservationSectionOverrides({});
+    setSelectedCategory(survivalPresetGroups[0].id);
   };
 
   const confirmGroupRename = (groupId) => {
@@ -835,6 +887,18 @@ function App() {
             </select>
           </label>
           <p className="data-status" role="status">{dataStatus}</p>
+
+          <div className="preset-block">
+            <h3>Presets</h3>
+            <button
+              type="button"
+              className={selectedPreset === 'survival-600' ? 'preset selected' : 'preset'}
+              onClick={applySurvivalPreset}
+            >
+              Survival base - 600 chests
+            </button>
+            <p className="helper-text">A practical player-style layout: all survival-view items, nine familiar groups, and 600 double chests.</p>
+          </div>
 
           <div className="field-grid">
             <label>
