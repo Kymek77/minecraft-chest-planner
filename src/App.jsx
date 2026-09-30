@@ -153,6 +153,7 @@ function App() {
   const [editingGroupId, setEditingGroupId] = useState(null);
   const [editingPoolId, setEditingPoolId] = useState(null);
   const [renameDraft, setRenameDraft] = useState('');
+  const [expandedReservationGroups, setExpandedReservationGroups] = useState({});
   const dragSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 6 } }),
@@ -578,6 +579,11 @@ function App() {
     [customStorageGroups, storagePlanEntries],
   );
 
+  const reservationGroupSection = (entries) => {
+    const sectionIds = [...new Set(entries.map((entry) => reservationSectionOverrides[entry.id] || ''))];
+    return sectionIds.length === 1 ? sectionIds[0] : '';
+  };
+
   const addStorageGroup = () => {
     const label = newStorageGroupName.trim();
     if (!label) return;
@@ -960,14 +966,6 @@ function App() {
               ))}
             </div>
 
-            <div className="search-box">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search items or ID"
-              />
-            </div>
           </div>
 
           <div className="group-creator">
@@ -1031,6 +1029,15 @@ function App() {
                 </ItemDropTarget>
               ))}
             </div>
+          </div>
+
+          <div className="search-box">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search items or ID"
+            />
           </div>
 
           {overallStats.availableChests < 0 && (
@@ -1132,6 +1139,7 @@ function App() {
 
           <div className="summary-block">
             <h3>Priority types</h3>
+            <p className="helper-text">Alphabetical quick-reference preview of the first eight selected item types. It does not change reservations or placement.</p>
             <div className="priority-list">
               {priorityItems.map((item) => (
                 <div key={item.id} className="priority-row">
@@ -1177,8 +1185,36 @@ function App() {
                   }}
                   onDragEnd={() => setDraggedReservationId(null)}
                 >
+                  <div className="reservation-group-header">
+                    <button
+                      type="button"
+                      className="reservation-group-toggle"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setExpandedReservationGroups((current) => ({ ...current, [group.id]: !current[group.id] }));
+                      }}
+                      aria-expanded={!!expandedReservationGroups[group.id]}
+                    >
+                      {expandedReservationGroups[group.id] ? 'Hide' : 'Show'} reservations
+                    </button>
+                    <label onClick={(event) => event.stopPropagation()}>
+                      Section
+                      <select
+                        value={reservationGroupSection(group.entries)}
+                        onChange={(event) => moveGroupReservationsToSection(group.id, event.target.value)}
+                      >
+                        <option value="">Auto</option>
+                        {sections.map((section) => <option key={section.id} value={section.id}>Section {section.id}</option>)}
+                      </select>
+                    </label>
+                  </div>
                   <strong>{group.label}</strong>
                   <small>{group.entries.length} reservations, {group.entries.reduce((total, entry) => total + entry.chestCount, 0)} chests</small>
+                  {expandedReservationGroups[group.id] && (
+                    <div className="reservation-group-entries">
+                      {group.entries.map((entry) => <span key={entry.id}>{entry.label} ({entry.chestCount})</span>)}
+                    </div>
+                  )}
                 </div>
               ))}
               {storagePlanEntries.map((entry) => (

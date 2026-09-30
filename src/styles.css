@@ -782,6 +782,45 @@ input:focus, select:focus {
   font-size: 0.72rem;
 }
 
+.reservation-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.reservation-group-header label {
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.reservation-group-header select {
+  width: auto;
+  padding: 4px 7px;
+  font-size: 0.74rem;
+}
+
+.reservation-group-toggle {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font-size: 0.72rem;
+}
+
+.reservation-group-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(52, 211, 153, 0.2);
+  color: var(--text);
+  font-size: 0.72rem;
+}
+
 .reservation-swatch {
   grid-row: span 2;
   width: 8px;
