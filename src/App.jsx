@@ -573,8 +573,8 @@ function App() {
                   </div>
 
                   <div className="inventory-card-meta">
-                    <small>{item.subcategory}</small>
-                    <small>{item.category}</small>
+                    <small>{item.category} / {item.subcategory}</small>
+                    <small>{[item.material, item.form, item.dimension].filter(Boolean).join(' • ')}</small>
                   </div>
                 </div>
               );

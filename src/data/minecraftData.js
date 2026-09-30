@@ -82,7 +82,7 @@ const displayNameFromId = (name) =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
 
-export const classifyMinecraftItem = (item) => {
+const classifyBaseMinecraftItem = (item) => {
   const name = item.name.toLowerCase();
   const displayName = item.displayName || name;
   const id = `minecraft:${item.name}`;
@@ -169,18 +169,98 @@ export const classifyMinecraftItem = (item) => {
   return { category: 'Utility', subcategory: 'Miscellaneous' };
 };
 
-const normalizeItem = (item) => ({
-  id: `minecraft:${item.name}`,
-  name: item.displayName || item.name,
-  category: classifyMinecraftItem(item).category,
-  subcategory: classifyMinecraftItem(item).subcategory,
-  stack: item.stackSize || 64,
-  maxDurability: item.maxDurability || null,
-});
+const woodMaterials = ['oak', 'spruce', 'birch', 'jungle', 'acacia', 'cherry', 'pale_oak', 'dark_oak', 'mangrove', 'bamboo', 'crimson', 'warped', 'poplar'];
+const colorMaterials = ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', 'pink', 'gray', 'light_gray', 'cyan', 'purple', 'blue', 'brown', 'green', 'red', 'black'];
+
+const findMaterial = (name, materials) => {
+  const match = materials.find((material) => name === material || name.startsWith(`${material}_`) || name.includes(`_${material}_`));
+  return match ? match.replaceAll('_', ' ') : null;
+};
+
+const deriveItemFacets = (item, baseClassification) => {
+  const name = item.name.toLowerCase();
+  const material = findMaterial(name, woodMaterials) || findMaterial(name, colorMaterials);
+  const dimension = name.includes('nether') || ['netherrack', 'basalt', 'blackstone', 'soul_sand', 'soul_soil', 'crimson', 'warped', 'blaze', 'ghast', 'magma'].some((part) => name.includes(part))
+    ? 'Nether'
+    : name.includes('end_') || name.includes('ender') || name.includes('chorus') || name.includes('dragon')
+      ? 'End'
+      : name.includes('sculk') || name.includes('echo_shard')
+        ? 'Deep Dark'
+        : name.includes('prismarine') || name.includes('coral') || name.includes('kelp') || name.includes('sea_')
+          ? 'Ocean'
+          : 'Overworld';
+  const form = name.includes('hanging_sign')
+    ? 'Hanging Sign'
+    : name.includes('fence_gate')
+      ? 'Fence Gate'
+      : name.includes('trapdoor')
+        ? 'Trapdoor'
+        : name.endsWith('_door') || name === 'iron_door'
+          ? 'Door'
+          : name.includes('pressure_plate')
+            ? 'Pressure Plate'
+            : name.endsWith('_button')
+              ? 'Button'
+              : name.endsWith('_stairs')
+                ? 'Stairs'
+                : name.endsWith('_slab')
+                  ? 'Slab'
+                  : name.endsWith('_wall')
+                    ? 'Wall'
+                    : name.endsWith('_fence')
+                      ? 'Fence'
+                      : name.endsWith('_sign')
+                        ? 'Sign'
+                        : name.includes('log') || name.includes('stem') || name.includes('hyphae')
+                          ? 'Log'
+                          : name.includes('plank')
+                            ? 'Planks'
+                            : name.includes('ore')
+                              ? 'Ore'
+                              : name.includes('ingot')
+                                ? 'Ingot'
+                                : name.includes('nugget')
+                                  ? 'Nugget'
+                                  : name.includes('block')
+                                    ? 'Block'
+                                    : 'Base';
+  const family = baseClassification.category === 'Building'
+    ? (material || (name.includes('stone') || name.includes('deepslate') ? 'Stone' : name.includes('glass') ? 'Glass' : name.includes('terracotta') || name.includes('concrete') ? 'Colored Blocks' : dimension === 'Nether' ? 'Nether Blocks' : 'General Building'))
+    : baseClassification.category === 'Resources'
+      ? (name.includes('ore') ? 'Ores' : name.includes('ingot') || name.includes('nugget') ? 'Metals' : name.includes('diamond') || name.includes('emerald') ? 'Gems' : 'Materials')
+      : baseClassification.subcategory;
+  const category = baseClassification.category === 'Wood' || baseClassification.category === 'Nether'
+    ? (form !== 'Base' || name.includes('block') || name.includes('stone') || name.includes('plank') || name.includes('log') || name.includes('stem') ? 'Building' : baseClassification.category === 'Wood' ? 'Farming' : 'Resources')
+    : baseClassification.category === 'Rare'
+      ? (name.includes('ore') || name.includes('ingot') || name.includes('shard') ? 'Resources' : 'Decor')
+      : baseClassification.category;
+
+  return {
+    category,
+    subcategory: family || baseClassification.subcategory,
+    family: family || 'General',
+    material,
+    form,
+    dimension,
+    rarity: baseClassification.category === 'Technical' ? 'Technical' : baseClassification.category === 'Rare' ? 'Rare' : 'Common',
+  };
+};
+
+export const classifyMinecraftItem = (item) => deriveItemFacets(item, classifyBaseMinecraftItem(item));
+
+const normalizeItem = (item) => {
+  const classification = classifyMinecraftItem(item);
+  return {
+    id: `minecraft:${item.name}`,
+    name: item.displayName || item.name,
+    ...classification,
+    stack: item.stackSize || 64,
+    maxDurability: item.maxDurability || null,
+  };
+};
 
 export const itemCategories = [
   'Building',
-  'Wood',
   'Resources',
   'Mechanics',
   'Combat',
@@ -191,7 +271,6 @@ export const itemCategories = [
   'Rare',
   'Tools',
   'Farming',
-  'Nether',
   'Technical',
   'Unclassified',
 ];
