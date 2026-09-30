@@ -599,6 +599,9 @@ function App() {
   const setItemDedicatedChests = (itemId, rawValue) => {
     const chestCount = Math.max(0, Math.floor(Number(rawValue) || 0));
     setItemDedicatedChestOverrides((current) => ({ ...current, [itemId]: chestCount }));
+    if (chestCount > 0) {
+      setItemPoolOverrides((current) => ({ ...current, [itemId]: undefined }));
+    }
   };
 
   const setSharedPoolChests = (poolId, rawValue) => {
@@ -733,12 +736,16 @@ function App() {
       poolBuckets.get(key).items.push(item);
     });
     const pools = [...poolBuckets.values()].flatMap((bucket) =>
-      Array.from({ length: Math.ceil(bucket.items.length / CHEST_CAPACITY.double) }, (_, index) => ({
-        id: `preset-${bucket.groupId}-${bucket.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${index + 1}`,
-        groupId: bucket.groupId,
-        label: bucket.items.length > CHEST_CAPACITY.double ? `${bucket.label} ${index + 1}` : bucket.label,
-        itemIds: bucket.items.slice(index * CHEST_CAPACITY.double, (index + 1) * CHEST_CAPACITY.double).map((item) => item.id),
-      })),
+      Array.from({ length: Math.ceil(bucket.items.length / CHEST_CAPACITY.double) }, (_, index) => {
+        const chunk = bucket.items.slice(index * CHEST_CAPACITY.double, (index + 1) * CHEST_CAPACITY.double);
+        const rangeLabel = chunk.length > 1 ? `${chunk[0].name} to ${chunk.at(-1).name}` : chunk[0].name;
+        return {
+          id: `preset-${bucket.groupId}-${bucket.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${index + 1}`,
+          groupId: bucket.groupId,
+          label: bucket.items.length > CHEST_CAPACITY.double ? `${bucket.label}: ${rangeLabel}` : bucket.label,
+          itemIds: chunk.map((item) => item.id),
+        };
+      }),
     );
     const poolByItemId = Object.fromEntries(pools.flatMap((pool) => pool.itemIds.map((itemId) => [itemId, pool.id])));
     const weightedItems = survivalItems.filter((item) => bulkReservationWeights[item.id.replace(/^minecraft:/, '')]);
@@ -1205,7 +1212,7 @@ function App() {
                       value={itemStoragePools[item.id] ? 0 : itemDedicatedChestOverrides[item.id] ?? 1}
                       onChange={(event) => setItemDedicatedChests(item.id, event.target.value)}
                     />
-                    <small>{itemStoragePools[item.id] ? 'Uses a custom chest pool' : 'Reserved for this item only'}</small>
+                    <small>{itemStoragePools[item.id] ? `Uses pool: ${storagePoolById[itemStoragePools[item.id]]?.label}` : 'Reserved for this item only'}</small>
                   </label>
                 </div>
                 </DraggableItemCard>
