@@ -4,6 +4,7 @@ import {
 } from './data/minecraftItems';
 import {
   DEFAULT_MINECRAFT_VERSION,
+  fetchMinecraftDataVersions,
   fetchMinecraftItems,
   fetchMojangReleaseVersions,
   fetchMinecraftVersions,
@@ -57,14 +58,16 @@ function App() {
       setDataStatus(`Loading Minecraft ${minecraftVersion} item data...`);
 
       try {
-        const [versions, publicReleaseInfo] = await Promise.all([
+        const [versions, publicReleaseInfo, minecraftDataVersions] = await Promise.all([
           fetchMinecraftVersions(),
           fetchMojangReleaseVersions(),
+          fetchMinecraftDataVersions(),
         ]);
 
         if (!active) return;
         const supportedVersions = publicReleaseInfo.releases.filter((version) => versions.includes(version));
-        const latestMinecraftDataVersion = supportedVersions[0] || DEFAULT_MINECRAFT_VERSION;
+        const latestMinecraftDataVersion = publicReleaseInfo.releases.find((version) => minecraftDataVersions.includes(version))
+          || DEFAULT_MINECRAFT_VERSION;
         const availableVersions = publicReleaseInfo.releases.filter((version) => versions.includes(version));
         const latestSupported = availableVersions[0] || DEFAULT_MINECRAFT_VERSION;
         setMinecraftVersions(supportedVersions);

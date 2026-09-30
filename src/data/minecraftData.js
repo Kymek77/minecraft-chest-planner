@@ -198,26 +198,24 @@ export const itemCategories = [
 ];
 
 export const fetchMinecraftVersions = async () => {
-  const [minecraftDataResult, mcmetaResult] = await Promise.allSettled([
-    fetch(`${MINECRAFT_DATA_REPO}/common/versions.json`).then((response) => {
-      if (!response.ok) throw new Error(`minecraft-data versions (${response.status})`);
-      return response.json();
-    }),
+  const [minecraftDataVersions, mcmetaVersions] = await Promise.all([
+    fetchMinecraftDataVersions(),
     fetch(`${MCMETA_REPO}/summary/versions/data.json`).then((response) => {
       if (!response.ok) throw new Error(`mcmeta versions (${response.status})`);
       return response.json();
     }),
   ]);
 
-  if (minecraftDataResult.status === 'rejected') {
-    throw new Error(minecraftDataResult.reason?.message || 'Unable to load Minecraft versions.');
-  }
+  return [...new Set([
+    ...minecraftDataVersions,
+    ...mcmetaVersions.filter((version) => version.stable).map((version) => version.id),
+  ])];
+};
 
-  const mcmetaVersions = mcmetaResult.status === 'fulfilled'
-    ? mcmetaResult.value.filter((version) => version.stable).map((version) => version.id)
-    : [];
-
-  return [...new Set([...minecraftDataResult.value, ...mcmetaVersions])];
+export const fetchMinecraftDataVersions = async () => {
+  const response = await fetch(`${MINECRAFT_DATA_REPO}/common/versions.json`);
+  if (!response.ok) throw new Error(`Unable to load minecraft-data versions (${response.status})`);
+  return response.json();
 };
 
 export const fetchMojangReleaseVersions = async () => {
