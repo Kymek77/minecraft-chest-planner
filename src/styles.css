@@ -441,9 +441,9 @@ input:focus, select:focus {
 
 .pool-drop-target {
   position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(78px, 96px);
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
   padding: 10px;
   border: 1px dashed rgba(125, 211, 252, 0.35);
@@ -454,14 +454,14 @@ input:focus, select:focus {
 .pool-name-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 2px;
   min-width: 0;
 }
 
 .pool-name-row strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .pool-name-row input {
@@ -485,6 +485,10 @@ input:focus, select:focus {
   gap: 3px;
 }
 
+.pool-drop-target > div {
+  min-width: 0;
+}
+
 .pool-drop-target small {
   color: var(--muted);
   font-size: 0.72rem;
@@ -492,6 +496,7 @@ input:focus, select:focus {
 
 .pool-drop-target label {
   min-width: 74px;
+  min-width: 0;
   color: var(--muted);
   font-size: 0.72rem;
 }

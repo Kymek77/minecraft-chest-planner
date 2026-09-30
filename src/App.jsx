@@ -64,20 +64,50 @@ const survivalPresetDedicatedChests = (item) => commonSurvivalReservations[item.
 
 const survivalPresetPoolLabelForItem = (item, groupId) => {
   const id = item.id.replace(/^minecraft:/, '');
+  const woodType = ['oak', 'spruce', 'birch', 'jungle', 'acacia', 'dark_oak', 'mangrove', 'cherry', 'pale_oak', 'bamboo', 'crimson', 'warped']
+    .find((type) => id.startsWith(`${type}_`));
+  const title = (value) => value.split('_').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+  const form = /(slab|stairs)/.test(id) ? 'Slabs and stairs'
+    : /(fence|fence_gate)/.test(id) ? 'Fences and gates'
+      : /(door|trapdoor)/.test(id) ? 'Doors and trapdoors'
+        : /(sign|hanging_sign)/.test(id) ? 'Signs'
+          : /(button|pressure_plate)/.test(id) ? 'Buttons and pressure plates'
+            : /(boat|chest_boat|raft|chest_raft)/.test(id) ? 'Boats and rafts'
+              : null;
+  if (woodType && form) return `${title(woodType)} ${form}`;
+
   if (groupId === 'preset-building') {
-    if (/(slab|stairs|wall|bricks|tile|chiseled|polished)/.test(id)) return 'Masonry shapes';
-    if (/(glass|lantern|torch|candle|lightning_rod)/.test(id)) return 'Lighting and glass';
-    if (/(wool|terracotta|concrete|glazed|carpet|banner)/.test(id)) return 'Colored blocks';
-    return 'Building extras';
+    const masonry = ['cobbled_deepslate', 'deepslate', 'blackstone', 'sandstone', 'red_sandstone', 'prismarine', 'end_stone', 'nether_brick', 'stone_brick', 'bricks', 'quartz', 'tuff', 'granite', 'diorite', 'andesite']
+      .find((material) => id.includes(material));
+    if (masonry) {
+      if (/(slab|stairs|wall)/.test(id)) return `${title(masonry)} shapes`;
+      if (/(polished|chiseled|bricks|tiles)/.test(id)) return `${title(masonry)} variants`;
+      return `${title(masonry)} blocks`;
+    }
+    const color = ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'lime', 'pink', 'gray', 'light_gray', 'cyan', 'purple', 'blue', 'brown', 'green', 'red', 'black']
+      .find((name) => id.startsWith(`${name}_`));
+    if (color && /(wool|terracotta|concrete|glazed|carpet|banner)/.test(id)) return `${title(color)} colored blocks`;
+    if (/(glass|pane)/.test(id)) return 'Glass blocks and panes';
+    if (/(lantern|torch|candle|lightning_rod)/.test(id)) return 'Lighting fixtures';
+    if (/(ladder|scaffolding|chain|iron_bars)/.test(id)) return 'Construction utility';
+    return 'Uncommon building blocks';
   }
-  if (groupId === 'preset-wood') return /(flower|bush|lily|coral|moss|vine)/.test(id) ? 'Flowers and greenery' : 'Woodland supplies';
-  if (groupId === 'preset-materials') return /(dye|wool|terracotta|concrete)/.test(id) ? 'Colors and textiles' : 'Crafting materials';
-  if (groupId === 'preset-tools') return /(enchant|book|anvil|grindstone|smithing)/.test(id) ? 'Enchantment gear' : 'Tools and equipment';
-  if (groupId === 'preset-food') return /(seed|sapling)/.test(id) ? 'Seeds and starters' : 'Food and farm goods';
-  if (groupId === 'preset-mobs') return /(head|skull|disc|totem|saddle|horse_armor)/.test(id) ? 'Rare trophies' : 'Mob drops';
-  if (groupId === 'preset-redstone') return /(rail|minecart)/.test(id) ? 'Rails and minecarts' : 'Redstone components';
-  if (groupId === 'preset-nether') return /(end_|dragon|chorus|purpur|shulker)/.test(id) ? 'End finds' : 'Nether finds';
-  return 'Decorations and oddities';
+  if (groupId === 'preset-wood') {
+    if (woodType) return `${title(woodType)} natural blocks`;
+    return /(flower|bush|lily|coral)/.test(id) ? 'Flowers and aquatic plants' : 'Natural greenery';
+  }
+  if (groupId === 'preset-materials') {
+    if (/(dye|ink_sac|bone_meal)/.test(id)) return 'Dyes and pigments';
+    if (/(leather|string|rabbit_hide|feather)/.test(id)) return 'Textiles and hides';
+    if (/(powder|shard|crystal|dust)/.test(id)) return 'Dusts and crystals';
+    return 'Crafting materials';
+  }
+  if (groupId === 'preset-tools') return /(enchant|book|anvil|grindstone|smithing)/.test(id) ? 'Enchanting and smithing' : 'Rare equipment';
+  if (groupId === 'preset-food') return /(seed|sapling)/.test(id) ? 'Seeds and starters' : /(potion|bottle)/.test(id) ? 'Brewing ingredients' : 'Prepared food';
+  if (groupId === 'preset-mobs') return /(head|skull|disc|totem|saddle|horse_armor)/.test(id) ? 'Rare trophies' : /(spawn_egg)/.test(id) ? 'Spawn eggs' : 'Uncommon mob drops';
+  if (groupId === 'preset-redstone') return /(rail|minecart)/.test(id) ? 'Rails and minecarts' : /(piston|observer|hopper|dispenser|dropper)/.test(id) ? 'Redstone machines' : 'Redstone circuits';
+  if (groupId === 'preset-nether') return /(end_|dragon|chorus|purpur|shulker)/.test(id) ? 'End finds' : /(bastion|piglin|ancient_debris)/.test(id) ? 'Bastion loot' : 'Nether finds';
+  return /(painting|item_frame|armor_stand)/.test(id) ? 'Display decorations' : 'Uncommon decorations';
 };
 
 const bulkReservationWeights = {
