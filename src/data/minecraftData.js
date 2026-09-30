@@ -301,7 +301,7 @@ const deriveItemFacets = (item, baseClassification) => {
 export const classifyMinecraftItem = (item) => deriveItemFacets(item, classifyBaseMinecraftItem(item));
 
 const normalizeItem = (item, tags = []) => {
-  const classification = classifyMinecraftItem({ ...item, tags });
+  const classification = classifyMinecraftItem({ ...item, tags: Array.isArray(tags) ? tags : [] });
   return {
     id: `minecraft:${item.name}`,
     name: item.displayName || item.name,
@@ -431,4 +431,4 @@ export const fetchMinecraftItems = async (version, metadataFallbackVersion) => {
   };
 };
 
-export const fallbackMinecraftItems = fallbackItems.map(normalizeItem);
+export const fallbackMinecraftItems = fallbackItems.map((item) => normalizeItem(item));
