@@ -109,6 +109,7 @@ const makeIncludedItemMap = (items, selectedIds = items.map((item) => item.id)) 
 
 function App() {
   const fileInputRef = useRef(null);
+  const draggedItemIdRef = useRef(null);
 
   const [minecraftItems, setMinecraftItems] = useState(fallbackMinecraftItems);
   const [minecraftVersion, setMinecraftVersion] = useState(null);
@@ -127,10 +128,14 @@ function App() {
   const [itemGroupOverrides, setItemGroupOverrides] = useState({});
   const [itemDedicatedChestOverrides, setItemDedicatedChestOverrides] = useState({});
   const [customStorageGroups, setCustomStorageGroups] = useState([]);
+  const [customStoragePools, setCustomStoragePools] = useState([]);
+  const [itemPoolOverrides, setItemPoolOverrides] = useState({});
   const [storageGroupChestOverrides, setStorageGroupChestOverrides] = useState({});
   const [reservationSectionOverrides, setReservationSectionOverrides] = useState({});
   const [draggedReservationId, setDraggedReservationId] = useState(null);
+  const [draggedItemId, setDraggedItemId] = useState(null);
   const [newStorageGroupName, setNewStorageGroupName] = useState('');
+  const [newStoragePoolName, setNewStoragePoolName] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -237,6 +242,29 @@ function App() {
     [itemGroupOverrides, minecraftItems],
   );
 
+  const storagePools = useMemo(
+    () => storageGroups.flatMap((group) => [
+      { id: `${group.id}-shared`, groupId: group.id, label: 'Shared pool', isDefault: true },
+      ...customStoragePools.filter((pool) => pool.groupId === group.id),
+    ]),
+    [customStorageGroups, storageGroups],
+  );
+
+  const storagePoolById = useMemo(
+    () => Object.fromEntries(storagePools.map((pool) => [pool.id, pool])),
+    [storagePools],
+  );
+
+  const itemStoragePools = useMemo(
+    () => Object.fromEntries(minecraftItems.map((item) => {
+      const groupId = itemStorageGroups[item.id];
+      const fallbackPoolId = `${groupId}-shared`;
+      const overriddenPool = storagePoolById[itemPoolOverrides[item.id]];
+      return [item.id, overriddenPool?.groupId === groupId ? overriddenPool.id : fallbackPoolId];
+    })),
+    [itemGroupOverrides, itemPoolOverrides, minecraftItems, storagePoolById, itemStorageGroups],
+  );
+
   const orderedAvailableItems = useMemo(() => {
     const sorted = availableItems.slice();
     if (itemOrder === 'alphabetical') {
@@ -265,35 +293,46 @@ function App() {
         }))
         .filter(({ chestCount }) => chestCount > 0);
       const sharedItems = items.filter((item) => !itemDedicatedChestOverrides[item.id]);
-      const minimumSharedChests = Math.ceil(sharedItems.length / chestSlotsPerChest);
-      const requestedSharedChests = storageGroupChestOverrides[group.id];
-      const sharedChests = requestedSharedChests === undefined
-        ? minimumSharedChests
-        : Math.max(minimumSharedChests, Number(requestedSharedChests) || 0);
+      const pools = storagePools
+        .filter((pool) => pool.groupId === group.id)
+        .map((pool) => {
+          const poolItems = sharedItems.filter((item) => itemStoragePools[item.id] === pool.id);
+          const minimumChests = Math.ceil(poolItems.length / chestSlotsPerChest);
+          const requestedChests = storageGroupChestOverrides[pool.id];
+          return {
+            ...pool,
+            items: poolItems,
+            minimumChests,
+            chestCount: requestedChests === undefined
+              ? minimumChests
+              : Math.max(minimumChests, Number(requestedChests) || 0),
+          };
+        });
 
       return [group.id, {
         ...group,
         items,
         sharedItems,
         dedicatedItems,
-        minimumSharedChests,
-        sharedChests,
+        pools,
         dedicatedChests: dedicatedItems.reduce((total, entry) => total + entry.chestCount, 0),
       }];
     })),
-    [chestSlotsPerChest, itemDedicatedChestOverrides, itemStorageGroups, selectedItems, storageGroupChestOverrides, storageGroups],
+    [chestSlotsPerChest, itemDedicatedChestOverrides, itemStorageGroups, itemStoragePools, selectedItems, storageGroupChestOverrides, storageGroups, storagePools],
   );
 
   const storagePlanEntries = useMemo(
     () => storageGroups.flatMap((group) => {
       const groupPlan = storagePlanByGroupId[group.id];
-      const sharedEntry = groupPlan.sharedChests > 0 ? [{
-        id: `${group.id}-shared`,
-        label: `${group.label} shared storage`,
-        chestCount: groupPlan.sharedChests,
-        itemPreview: groupPlan.sharedItems.slice(0, 3).map((item) => item.name),
-        iconItem: groupPlan.sharedItems[0],
-      }] : [];
+      const sharedEntries = groupPlan.pools
+        .filter((pool) => pool.chestCount > 0)
+        .map((pool) => ({
+          id: pool.id,
+          label: `${group.label}: ${pool.label}`,
+          chestCount: pool.chestCount,
+          itemPreview: pool.items.slice(0, 3).map((item) => item.name),
+          iconItem: pool.items[0],
+        }));
       const dedicatedEntries = groupPlan.dedicatedItems.map(({ item, chestCount }) => ({
         id: `${group.id}-${item.id}`,
         label: item.name,
@@ -302,7 +341,7 @@ function App() {
         iconItem: item,
       }));
 
-      return [...dedicatedEntries, ...sharedEntry];
+      return [...dedicatedEntries, ...sharedEntries];
     }),
     [storageGroups, storagePlanByGroupId],
   );
@@ -467,6 +506,14 @@ function App() {
 
   const setItemStorageGroup = (itemId, groupId) => {
     setItemGroupOverrides((current) => ({ ...current, [itemId]: groupId }));
+    setItemPoolOverrides((current) => ({ ...current, [itemId]: undefined }));
+  };
+
+  const setItemStoragePool = (itemId, poolId) => {
+    const pool = storagePoolById[poolId];
+    if (!pool) return;
+    setItemGroupOverrides((current) => ({ ...current, [itemId]: pool.groupId }));
+    setItemPoolOverrides((current) => ({ ...current, [itemId]: poolId }));
   };
 
   const setItemDedicatedChests = (itemId, rawValue) => {
@@ -474,10 +521,12 @@ function App() {
     setItemDedicatedChestOverrides((current) => ({ ...current, [itemId]: chestCount }));
   };
 
-  const setSharedGroupChests = (groupId, rawValue) => {
-    const minimum = storagePlanByGroupId[groupId]?.minimumSharedChests || 0;
+  const setSharedPoolChests = (poolId, rawValue) => {
+    const minimum = Object.values(storagePlanByGroupId)
+      .flatMap((groupPlan) => groupPlan.pools)
+      .find((pool) => pool.id === poolId)?.minimumChests || 0;
     const chestCount = Math.max(minimum, Math.floor(Number(rawValue) || 0));
-    setStorageGroupChestOverrides((current) => ({ ...current, [groupId]: chestCount }));
+    setStorageGroupChestOverrides((current) => ({ ...current, [poolId]: chestCount }));
   };
 
   const moveReservationToSection = (reservationId, sectionId) => {
@@ -496,6 +545,14 @@ function App() {
     setSelectedCategory(id);
   };
 
+  const addStoragePool = () => {
+    const label = newStoragePoolName.trim();
+    if (!label) return;
+    const id = `pool-${crypto.randomUUID()}`;
+    setCustomStoragePools((current) => [...current, { id, groupId: selectedCategory, label }]);
+    setNewStoragePoolName('');
+  };
+
   const applyPreset = (presetKey) => {
     const preset = inventoryPresets[presetKey];
     if (!preset) return;
@@ -511,6 +568,8 @@ function App() {
     setItemGroupOverrides({});
     setItemDedicatedChestOverrides({});
     setCustomStorageGroups([]);
+    setCustomStoragePools([]);
+    setItemPoolOverrides({});
     setStorageGroupChestOverrides({});
     setReservationSectionOverrides({});
     setSelectedCategory(unassignedStorageGroup.id);
@@ -529,6 +588,8 @@ function App() {
       itemGroupOverrides,
       itemDedicatedChestOverrides,
       customStorageGroups,
+      customStoragePools,
+      itemPoolOverrides,
       storageGroupChestOverrides,
       reservationSectionOverrides,
       generatedAt: new Date().toISOString(),
@@ -572,6 +633,28 @@ function App() {
 
         setCustomStorageGroups(importedGroups);
 
+        const importedPools = Array.isArray(parsed.customStoragePools)
+          ? parsed.customStoragePools.filter((pool) =>
+            typeof pool?.id === 'string' &&
+            typeof pool?.groupId === 'string' &&
+            importedGroupIds.has(pool.groupId) &&
+            typeof pool?.label === 'string')
+          : [];
+        const importedPoolIds = new Set([
+          ...Array.from(importedGroupIds).map((groupId) => `${groupId}-shared`),
+          ...importedPools.map((pool) => pool.id),
+        ]);
+        setCustomStoragePools(importedPools);
+
+        if (parsed.itemPoolOverrides && typeof parsed.itemPoolOverrides === 'object') {
+          setItemPoolOverrides(
+            Object.fromEntries(
+              Object.entries(parsed.itemPoolOverrides)
+                .filter(([itemId, poolId]) => minecraftItems.some((item) => item.id === itemId) && importedPoolIds.has(poolId)),
+            ),
+          );
+        }
+
         if (parsed.itemDedicatedChestOverrides && typeof parsed.itemDedicatedChestOverrides === 'object') {
           setItemDedicatedChestOverrides(
             Object.fromEntries(
@@ -586,8 +669,8 @@ function App() {
           setStorageGroupChestOverrides(
             Object.fromEntries(
               Object.entries(parsed.storageGroupChestOverrides)
-                .filter(([groupId, chestCount]) => importedGroupIds.has(groupId) && Number(chestCount) >= 0)
-                .map(([groupId, chestCount]) => [groupId, Math.floor(Number(chestCount))]),
+                .filter(([poolId, chestCount]) => (importedPoolIds.has(poolId) || importedGroupIds.has(poolId)) && Number(chestCount) >= 0)
+                .map(([poolId, chestCount]) => [importedGroupIds.has(poolId) ? `${poolId}-shared` : poolId, Math.floor(Number(chestCount))]),
             ),
           );
         }
@@ -770,6 +853,14 @@ function App() {
                   type="button"
                   className={selectedCategory === group.id ? 'tab active' : 'tab'}
                   onClick={() => setSelectedCategory(group.id)}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const itemId = event.dataTransfer.getData('application/x-minecraft-item') || event.dataTransfer.getData('text/plain') || draggedItemIdRef.current;
+                    if (itemId) setItemStorageGroup(itemId, group.id);
+                    draggedItemIdRef.current = null;
+                    setDraggedItemId(null);
+                  }}
                 >
                   {group.label}
                 </button>
@@ -794,19 +885,48 @@ function App() {
             <button type="button" className="secondary-button" onClick={addStorageGroup}>Add group</button>
           </div>
 
-          <div className="reservation-control">
-            <label>
-              Shared chests for {storagePlanByGroupId[selectedCategory]?.label}
-              <input
-                type="number"
-                min={storagePlanByGroupId[selectedCategory]?.minimumSharedChests || 0}
-                value={storagePlanByGroupId[selectedCategory]?.sharedChests || 0}
-                onChange={(event) => setSharedGroupChests(selectedCategory, event.target.value)}
-              />
-            </label>
-            <small>
-              {storagePlanByGroupId[selectedCategory]?.sharedItems.length || 0} shared item types; minimum {storagePlanByGroupId[selectedCategory]?.minimumSharedChests || 0} chest{storagePlanByGroupId[selectedCategory]?.minimumSharedChests === 1 ? '' : 's'}.
-            </small>
+          <div className="pool-manager">
+            <div className="pool-manager-header">
+              <div>
+                <h3>Chest pools for {storagePlanByGroupId[selectedCategory]?.label}</h3>
+                <p className="helper-text">Drop items into a pool to share its reserved chests.</p>
+              </div>
+              <label>
+                New pool
+                <input value={newStoragePoolName} onChange={(event) => setNewStoragePoolName(event.target.value)} placeholder="e.g. Acacia shapes" />
+              </label>
+              <button type="button" className="secondary-button" onClick={addStoragePool}>Add pool</button>
+            </div>
+            <div className="pool-list">
+              {storagePlanByGroupId[selectedCategory]?.pools.map((pool) => (
+                <div
+                  key={pool.id}
+                  className="pool-drop-target"
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const itemId = event.dataTransfer.getData('application/x-minecraft-item') || event.dataTransfer.getData('text/plain') || draggedItemIdRef.current;
+                    if (itemId) setItemStoragePool(itemId, pool.id);
+                    draggedItemIdRef.current = null;
+                    setDraggedItemId(null);
+                  }}
+                >
+                  <div>
+                    <strong>{pool.label}</strong>
+                    <small>{pool.items.length} item types; minimum {pool.minimumChests} chest{pool.minimumChests === 1 ? '' : 's'}.</small>
+                  </div>
+                  <label>
+                    Chests
+                    <input
+                      type="number"
+                      min={pool.minimumChests}
+                      value={pool.chestCount}
+                      onChange={(event) => setSharedPoolChests(pool.id, event.target.value)}
+                    />
+                  </label>
+                </div>
+              ))}
+            </div>
           </div>
 
           {overallStats.availableChests < 0 && (
@@ -819,7 +939,22 @@ function App() {
             {filteredItems.map((item) => {
               const checked = !!includedItems[item.id];
               return (
-                <div key={item.id} className={checked ? 'inventory-card selected' : 'inventory-card'}>
+                <div
+                  key={item.id}
+                  className={checked ? 'inventory-card selected' : 'inventory-card'}
+                  draggable
+                  onDragStart={(event) => {
+                    event.dataTransfer.setData('application/x-minecraft-item', item.id);
+                    event.dataTransfer.setData('text/plain', item.id);
+                    event.dataTransfer.effectAllowed = 'move';
+                    draggedItemIdRef.current = item.id;
+                    setDraggedItemId(item.id);
+                  }}
+                  onDragEnd={() => {
+                    draggedItemIdRef.current = null;
+                    setDraggedItemId(null);
+                  }}
+                >
                   <div className="inventory-card-header">
                     <div className="item-title">
                       <MinecraftItemIcon item={item} assetVersion={minecraftVersion || TEXTURE_VERSION} />

@@ -372,6 +372,67 @@ input:focus, select:focus {
   background: rgba(52, 211, 153, 0.06);
 }
 
+.pool-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(125, 211, 252, 0.24);
+  border-radius: 8px;
+  background: rgba(125, 211, 252, 0.05);
+}
+
+.pool-manager-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 0.55fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.pool-manager-header h3 {
+  font-size: 0.92rem;
+}
+
+.pool-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.pool-drop-target {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px;
+  border: 1px dashed rgba(125, 211, 252, 0.35);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.54);
+}
+
+.pool-drop-target > div,
+.pool-drop-target label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.pool-drop-target small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.pool-drop-target label {
+  min-width: 74px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.pool-drop-target input {
+  padding: 6px 8px;
+  font-size: 0.8rem;
+}
+
 .reservation-control small,
 .item-group-control small {
   color: var(--muted);
@@ -876,6 +937,10 @@ input:focus, select:focus {
   .reservation-control {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .pool-manager-header {
+    grid-template-columns: 1fr;
   }
 
   .allocation-header {
