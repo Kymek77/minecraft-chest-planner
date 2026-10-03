@@ -22,6 +22,7 @@ const defaultStorageConfig = {
   totalSections: 8,
 };
 const DEFAULT_MINECRAFT_VERSION = '26.3';
+const ADMIN_DEFAULTS_STORAGE_KEY = 'chestcraft-admin-defaults-v1';
 
 const unassignedStorageGroup = { id: 'unassigned', label: 'Unassigned' };
 const TEXTURE_VERSION = DEFAULT_MINECRAFT_VERSION;
@@ -124,9 +125,78 @@ const makeIncludedItemMap = (items, selectedIds = items.map((item) => item.id)) 
   return map;
 };
 
+const builtInPresets = [{
+  id: 'survival-600',
+  label: 'Survival base - 600 chests',
+  description: 'Complete Minecraft 26.3 survival catalog with named pools and dedicated bulk reservations.',
+  ...defaultSurvivalPreset26_3,
+}];
+
+const loadAdminDefaults = () => {
+  try {
+    return JSON.parse(window.localStorage.getItem(ADMIN_DEFAULTS_STORAGE_KEY) || 'null');
+  } catch {
+    return null;
+  }
+};
+
+function AdminPage({ minecraftItems, survivalItemIds, presets, onSave, onExit }) {
+  const [search, setSearch] = useState('');
+  const [survivalIds, setSurvivalIds] = useState(() => new Set(survivalItemIds));
+  const [presetJson, setPresetJson] = useState(() => JSON.stringify(presets, null, 2));
+  const [message, setMessage] = useState('');
+  const visibleItems = minecraftItems.filter((item) => item.name.toLowerCase().includes(search.toLowerCase()) || item.id.includes(search.toLowerCase()));
+
+  useEffect(() => setSurvivalIds(new Set(survivalItemIds)), [survivalItemIds]);
+  useEffect(() => setPresetJson(JSON.stringify(presets, null, 2)), [presets]);
+
+  const save = () => {
+    try {
+      const nextPresets = JSON.parse(presetJson);
+      if (!Array.isArray(nextPresets) || nextPresets.some((preset) => !preset?.id || !preset?.label || !Array.isArray(preset.groups) || !Array.isArray(preset.pools) || typeof preset.dedicatedChests !== 'object')) {
+        throw new Error('Presets must be an array with id, label, groups, pools, and dedicatedChests.');
+      }
+      onSave({ survivalItemIds: [...survivalIds], presets: nextPresets });
+      setMessage('Defaults saved in this browser.');
+    } catch (error) {
+      setMessage(error.message || 'Unable to save the preset JSON.');
+    }
+  };
+
+  return (
+    <main className="admin-shell">
+      <header className="topbar">
+        <div><p className="eyebrow">ChestCraft Planner</p><h1>Default Administration</h1></div>
+        <button type="button" className="secondary-button" onClick={onExit}>Return to planner</button>
+      </header>
+      <section className="admin-grid">
+        <section className="panel admin-panel">
+          <div className="admin-panel-header"><h2>Survival obtainable items</h2><strong>{survivalIds.size} selected</strong></div>
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search items or IDs" />
+          <div className="admin-item-list">
+            {visibleItems.map((item) => <label key={item.id} className="admin-item-row"><input type="checkbox" checked={survivalIds.has(item.id)} onChange={() => setSurvivalIds((current) => {
+              const next = new Set(current);
+              if (next.has(item.id)) next.delete(item.id); else next.add(item.id);
+              return next;
+            })} /><span>{item.name}</span><small>{item.id}</small></label>)}
+          </div>
+        </section>
+        <section className="panel admin-panel">
+          <div className="admin-panel-header"><h2>Preset definitions</h2><strong>{presets.length} saved</strong></div>
+          <p className="helper-text">Edit the JSON to add, remove, or adjust fixed groups, pools, and dedicated reservations. Pool item IDs must use the minecraft namespace.</p>
+          <textarea value={presetJson} onChange={(event) => setPresetJson(event.target.value)} spellCheck="false" />
+        </section>
+      </section>
+      <footer className="admin-actions"><span role="status">{message}</span><button type="button" className="primary-button" onClick={save}>Save defaults</button></footer>
+    </main>
+  );
+}
+
 function App() {
   const fileInputRef = useRef(null);
   const draggedItemIdRef = useRef(null);
+  const [adminDefaults, setAdminDefaults] = useState(loadAdminDefaults);
+  const [isAdminPage, setIsAdminPage] = useState(() => window.location.hash === '#/admin');
 
   const [minecraftItems, setMinecraftItems] = useState(fallbackMinecraftItems);
   const [minecraftVersion, setMinecraftVersion] = useState(DEFAULT_MINECRAFT_VERSION);
@@ -215,6 +285,12 @@ function App() {
     };
   }, [minecraftVersion]);
 
+  useEffect(() => {
+    const syncRoute = () => setIsAdminPage(window.location.hash === '#/admin');
+    window.addEventListener('hashchange', syncRoute);
+    return () => window.removeEventListener('hashchange', syncRoute);
+  }, []);
+
   const updateStorageConfig = (field, rawValue) => {
     const nextValue = Math.max(1, Number(rawValue) || 1);
 
@@ -250,11 +326,19 @@ function App() {
     [storageGroups],
   );
 
+  const defaultSurvivalItemIds = useMemo(
+    () => minecraftItems.filter((item) => !nonSurvivalItemIds.has(item.id)).map((item) => item.id),
+    [minecraftItems],
+  );
+  const survivalItemIds = adminDefaults?.survivalItemIds || defaultSurvivalItemIds;
+  const survivalItemIdSet = useMemo(() => new Set(survivalItemIds), [survivalItemIds]);
+  const presets = adminDefaults?.presets || builtInPresets;
+
   const availableItems = useMemo(
     () => (itemScope === 'all'
       ? minecraftItems
-      : minecraftItems.filter((item) => !nonSurvivalItemIds.has(item.id))),
-    [itemScope, minecraftItems],
+      : minecraftItems.filter((item) => survivalItemIdSet.has(item.id))),
+    [itemScope, minecraftItems, survivalItemIdSet],
   );
 
   const itemStorageGroups = useMemo(
@@ -656,35 +740,50 @@ function App() {
     setSelectedCategory(unassignedStorageGroup.id);
   };
 
-  const applySurvivalPreset = () => {
+  const applyPreset = (preset) => {
     const itemIds = new Set(minecraftItems.map((item) => item.id));
-    const pools = defaultSurvivalPreset26_3.pools
+    const pools = preset.pools
       .map((pool) => ({ ...pool, itemIds: pool.itemIds.filter((itemId) => itemIds.has(itemId)) }))
       .filter((pool) => pool.itemIds.length > 0);
     const dedicatedChests = Object.fromEntries(
-      Object.entries(defaultSurvivalPreset26_3.dedicatedChests).filter(([itemId]) => itemIds.has(itemId)),
+      Object.entries(preset.dedicatedChests).filter(([itemId]) => itemIds.has(itemId)),
     );
     const plannedItemIds = new Set([...Object.keys(dedicatedChests), ...pools.flatMap((pool) => pool.itemIds)]);
     const itemGroups = Object.fromEntries([
       ...pools.flatMap((pool) => pool.itemIds.map((itemId) => [itemId, pool.groupId])),
-      ...Object.keys(dedicatedChests).map((itemId) => [itemId, defaultSurvivalPreset26_3.dedicatedGroupIds[itemId]]),
+      ...Object.keys(dedicatedChests).map((itemId) => [itemId, preset.dedicatedGroupIds?.[itemId] || unassignedStorageGroup.id]),
     ]);
     const poolByItemId = Object.fromEntries(pools.flatMap((pool) => pool.itemIds.map((itemId) => [itemId, pool.id])));
 
-    setSelectedPreset('survival-600');
+    setSelectedPreset(preset.id);
     setStorageConfig(defaultStorageConfig);
     setChestType('double');
     setItemScope('survival');
     setIncludedItems(makeIncludedItemMap(minecraftItems, [...plannedItemIds]));
-    setCustomStorageGroups(defaultSurvivalPreset26_3.groups);
+    setCustomStorageGroups(preset.groups);
     setCustomStoragePools(pools.map(({ itemIds, ...pool }) => pool));
     setItemGroupOverrides(itemGroups);
     setItemPoolOverrides(poolByItemId);
     setItemDedicatedChestOverrides(dedicatedChests);
     setStorageGroupChestOverrides(Object.fromEntries(pools.map((pool) => [pool.id, 1])));
     setReservationSectionOverrides({});
-    setSelectedCategory(defaultSurvivalPreset26_3.groups[0].id);
+    setSelectedCategory(preset.groups[0]?.id || unassignedStorageGroup.id);
   };
+
+  const saveAdminDefaults = (nextDefaults) => {
+    window.localStorage.setItem(ADMIN_DEFAULTS_STORAGE_KEY, JSON.stringify(nextDefaults));
+    setAdminDefaults(nextDefaults);
+  };
+
+  if (isAdminPage) {
+    return <AdminPage
+      minecraftItems={minecraftItems}
+      survivalItemIds={survivalItemIds}
+      presets={presets}
+      onSave={saveAdminDefaults}
+      onExit={() => { window.location.hash = ''; }}
+    />;
+  }
 
   const confirmGroupRename = (groupId) => {
     const label = renameDraft.trim();
@@ -850,7 +949,10 @@ function App() {
           <p className="eyebrow">ChestCraft Planner</p>
           <h1>Advanced Minecraft Chest Organizer</h1>
         </div>
-        <div className="header-badge">MC 1.21+ / section-based planner</div>
+        <div className="header-actions">
+          <div className="header-badge">MC 26.3 / section-based planner</div>
+          <button type="button" className="secondary-button" onClick={() => { window.location.hash = '/admin'; }}>Admin defaults</button>
+        </div>
       </header>
 
       <main className="workspace-grid">
@@ -875,14 +977,10 @@ function App() {
 
           <div className="preset-block">
             <h3>Presets</h3>
-            <button
-              type="button"
-              className={selectedPreset === 'survival-600' ? 'preset selected' : 'preset'}
-              onClick={applySurvivalPreset}
-            >
-              Survival base - 600 chests
-            </button>
-            <p className="helper-text">A fixed Minecraft 26.3 survival catalog: every eligible item is assigned once across named pools and dedicated bulk reservations totaling 600 double chests.</p>
+            <div className="preset-list">
+              {presets.map((preset) => <button key={preset.id} type="button" className={selectedPreset === preset.id ? 'preset selected' : 'preset'} onClick={() => applyPreset(preset)}>{preset.label}</button>)}
+            </div>
+            <p className="helper-text">Preset definitions and survival eligibility can be changed from Admin defaults.</p>
           </div>
 
           <div className="field-grid">
